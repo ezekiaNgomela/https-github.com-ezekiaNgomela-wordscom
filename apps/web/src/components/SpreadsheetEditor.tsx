@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Save, Download, FileSpreadsheet, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Play, Square } from 'lucide-react';
+import { Save, Download, FileSpreadsheet, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Play, Square, ArrowLeft } from 'lucide-react';
 import { saveAs } from 'file-saver';
 
 // Helper to get column letter (A, B, ..., Z, AA, AB...)
@@ -50,7 +50,15 @@ type CellData = {
 
 type GridData = Record<string, CellData>;
 
-export function SpreadsheetEditor() {
+interface SpreadsheetEditorProps {
+  onBack: () => void;
+}
+
+export function SpreadsheetEditor({ onBack }: SpreadsheetEditorProps) {
+  const [sheetTitle, setSheetTitle] = useState(() => {
+    return localStorage.getItem('wordscom_sheet_title') || 'Quarterly Financials';
+  });
+  const [activeTab, setActiveTab] = useState<'Home' | 'Insert' | 'Data' | 'Layout'>('Home');
   const [data, setData] = useState<GridData>(() => {
     try {
       const saved = localStorage.getItem('wordscom_sheet_data');
@@ -244,7 +252,7 @@ export function SpreadsheetEditor() {
 
   useEffect(() => {
     setIsSaved(false);
-  }, [data, numRows, numCols]);
+  }, [data, numRows, numCols, sheetTitle]);
 
   useEffect(() => {
     if (isSaved) return;
@@ -253,11 +261,12 @@ export function SpreadsheetEditor() {
       localStorage.setItem('wordscom_sheet_data', JSON.stringify(data));
       localStorage.setItem('wordscom_sheet_rows', String(numRows));
       localStorage.setItem('wordscom_sheet_cols', String(numCols));
+      localStorage.setItem('wordscom_sheet_title', sheetTitle);
       setIsSaved(true);
     }, 1500); // 1.5 seconds debounce
     
     return () => clearTimeout(timeoutId);
-  }, [data, numRows, numCols, isSaved]);
+  }, [data, numRows, numCols, sheetTitle, isSaved]);
 
   const insertFunction = (funcName: string) => {
     if (!editingCell && activeCell) {
@@ -508,86 +517,228 @@ export function SpreadsheetEditor() {
       }
   }
 
+  const getActiveCellCoords = () => {
+    if (!activeCell) return null;
+    const match = activeCell.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return null;
+    const cStr = match[1];
+    const rNum = parseInt(match[2], 10) - 1;
+    const cNum = getColIndex(cStr);
+    return { r: rNum, c: cNum };
+  };
+
+  const handleInsertRowBelow = () => {
+    const coords = getActiveCellCoords();
+    if (coords) {
+      insertRowAbove(coords.r + 1);
+    } else {
+      setNumRows(r => r + 1);
+    }
+    setIsSaved(false);
+  };
+
+  const handleInsertColRight = () => {
+    const coords = getActiveCellCoords();
+    if (coords) {
+      insertColLeft(coords.c + 1);
+    } else {
+      setNumCols(c => c + 1);
+    }
+    setIsSaved(false);
+  };
+
   return (
     <div className="flex flex-col h-full bg-white select-none relative animate-fade-in">
-      {/* Ribbon Header */}
-      <div className="flex items-center px-4 py-2 bg-gray-50 border-b border-gray-200 shrink-0">
-        <div className="flex space-x-6 text-xs sm:text-sm font-medium">
-          <span className="text-green-700 border-b-2 border-green-700 pb-2 -mb-[9px] px-1">Home</span>
-          <span className="text-gray-500 hover:text-gray-700 cursor-pointer pt-0.5">Insert</span>
-          <span className="text-gray-500 hover:text-gray-700 cursor-pointer pt-0.5">Data</span>
-        </div>
-      </div>
-
-      {/* Ribbon Content */}
-      <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto min-h-[48px] px-2 py-1.5 bg-gray-100/50 border-b border-gray-200 shrink-0">
-        <button 
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors ${
-            isSaved 
-              ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
-              : 'bg-green-600 text-white hover:bg-green-700'
-          }`}
-          onClick={handleSave} 
-          disabled={isSaved}
-        >
-          <Save size={14} />
-          <span className="text-xs">{isSaved ? 'Saved' : 'Save'}</span>
-        </button>
-        {!isSaved && <span className="text-[10px] text-amber-500 italic hidden sm:inline ml-1 font-semibold">Unsaved</span>}
+      {/* 2-Row Consolidated Header & Ribbon Panel */}
+      <div className="sticky top-0 z-30 bg-white shadow-sm flex flex-col shrink-0 border-b border-gray-200">
         
-        <div className="w-px h-8 bg-gray-300 mx-1 block" />
-        
-        <button className="flex flex-col items-center justify-center p-1 px-2 hover:bg-green-100 rounded text-gray-700 transition-colors" onClick={downloadCSV} title="Export CSV">
-          <Download size={18} />
-        </button>
-        
-        <div className="w-px h-8 bg-gray-300 mx-1 block" />
-        
-        <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.bold ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ bold: !activeStyle.bold })}><Bold size={14} /></button>
-          <div className="w-px bg-gray-300" />
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.italic ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ italic: !activeStyle.italic })}><Italic size={14} /></button>
-          <div className="w-px bg-gray-300" />
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.underline ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ underline: !activeStyle.underline })}><Underline size={14} /></button>
-        </div>
-
-        <div className="w-px h-8 bg-gray-300 mx-1 block" />
-
-        <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden">
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.border ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ border: !activeStyle.border })} title="Toggle Border"><Square size={14} /></button>
-        </div>
-
-        <div className="w-px h-8 bg-gray-300 mx-1 block" />
-        
-        <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1 cursor-pointer" title="Background Color">
-              <span className="text-xs font-semibold text-gray-500 uppercase">Bg</span>
-              <input 
-                type="color" 
-                className="w-6 h-6 cursor-pointer border border-gray-300 rounded overflow-hidden p-0 bg-white"
-                value={activeStyle.backgroundColor || '#ffffff'}
-                onChange={(e) => updateActiveCellStyle({ backgroundColor: e.target.value })}
+        {/* Unified Title Bar / Row 1 */}
+        <div className="px-3 py-1.5 flex items-center justify-between bg-zinc-900 text-white shrink-0">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <button 
+              onClick={onBack} 
+              className="p-1 px-1.5 hover:bg-white/10 rounded-md text-gray-200 transition-colors flex items-center gap-1 shrink-0 active:scale-95"
+            >
+              <ArrowLeft size={16} />
+              <span className="text-xs font-medium hidden md:inline">Dashboard</span>
+            </button>
+            <div className="w-px h-4 bg-zinc-700 mx-1 block hidden md:block" />
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <FileSpreadsheet size={15} className="text-green-500 fill-green-500 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wider text-green-400 hidden lg:inline shrink-0">Sheet Editor</span>
+              <input
+                type="text"
+                value={sheetTitle}
+                onChange={(e) => { setSheetTitle(e.target.value); setIsSaved(false); }}
+                className="text-xs sm:text-sm font-semibold bg-transparent border-0 ring-0 focus:outline-none focus:ring-1 focus:ring-green-500 px-1 py-0.5 rounded cursor-pointer w-[120px] sm:w-[180px] lg:w-[240px] truncate text-white placeholder-zinc-500 hover:bg-zinc-800"
+                placeholder="Spreadsheet Title"
               />
-            </label>
-            <label className="flex items-center gap-1 cursor-pointer" title="Text Color">
-              <span className="text-xs font-semibold text-gray-500 uppercase">A</span>
-              <input 
-                type="color" 
-                className="w-6 h-6 cursor-pointer border border-gray-300 rounded overflow-hidden p-0 bg-white"
-                value={activeStyle.color || '#000000'}
-                onChange={(e) => updateActiveCellStyle({ color: e.target.value })}
-              />
-            </label>
+            </div>
+          </div>
+
+          {/* Quick Tabs in Title Row */}
+          <div className="flex items-center gap-0.5 border-l border-zinc-700 ml-2 px-1">
+            {(['Home', 'Insert', 'Data'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-2 sm:px-3 py-0.5 text-xs font-bold rounded transition-all ${
+                  activeTab === tab 
+                    ? 'bg-green-600 text-white shadow-sm' 
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="hidden md:inline-block text-[10px] text-zinc-400">
+              {isSaved ? '● Saved' : '○ Unsaved'}
+            </span>
+            <button
+              onClick={handleSave}
+              disabled={isSaved}
+              className={`p-1 px-2.5 sm:py-1 text-xs rounded font-medium flex items-center gap-1 ${
+                isSaved 
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+                  : 'bg-green-600 hover:bg-green-700 text-white shadow'
+              }`}
+            >
+              <Save size={13} />
+              <span className="hidden sm:inline">Save</span>
+            </button>
+          </div>
         </div>
 
-        <div className="w-px h-8 bg-gray-300 mx-1 block" />
+        {/* Ribbon Active Content / Row 2 */}
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto hide-scrollbar min-h-[40px] max-h-[44px] px-3 py-1 bg-zinc-100 border-b border-zinc-200">
+          {activeTab === 'Home' && (
+            <>
+              <button className="flex flex-col items-center justify-center p-1 px-2 hover:bg-green-100 rounded text-gray-700 transition-colors" onClick={downloadCSV} title="Export CSV">
+                <Download size={15} />
+              </button>
+              
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+              
+              <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden flex-shrink-0">
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.bold ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ bold: !activeStyle.bold })}><Bold size={13} /></button>
+                <div className="w-px bg-gray-300" />
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.italic ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ italic: !activeStyle.italic })}><Italic size={13} /></button>
+                <div className="w-px bg-gray-300" />
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.underline ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ underline: !activeStyle.underline })}><Underline size={13} /></button>
+              </div>
 
-        <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden">
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.align === 'left' ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ align: 'left' })}><AlignLeft size={14} /></button>
-          <div className="w-px bg-gray-300" />
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.align === 'center' ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ align: 'center' })}><AlignCenter size={14} /></button>
-          <div className="w-px bg-gray-300" />
-          <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.align === 'right' ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ align: 'right' })}><AlignRight size={14} /></button>
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+
+              <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden flex-shrink-0">
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.border ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ border: !activeStyle.border })} title="Toggle Border"><Square size={13} /></button>
+              </div>
+
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+              
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="flex items-center gap-1 cursor-pointer" title="Background Color">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Bg</span>
+                  <input 
+                    type="color" 
+                    className="w-5 h-5 cursor-pointer border border-gray-300 rounded overflow-hidden p-0 bg-white"
+                    value={activeStyle.backgroundColor || '#ffffff'}
+                    onChange={(e) => updateActiveCellStyle({ backgroundColor: e.target.value })}
+                  />
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer" title="Text Color">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase">Col</span>
+                  <input 
+                    type="color" 
+                    className="w-5 h-5 cursor-pointer border border-gray-300 rounded overflow-hidden p-0 bg-white"
+                    value={activeStyle.color || '#000000'}
+                    onChange={(e) => updateActiveCellStyle({ color: e.target.value })}
+                  />
+                </label>
+              </div>
+
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+
+              <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden flex-shrink-0">
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.align === 'left' ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ align: 'left' })}><AlignLeft size={13} /></button>
+                <div className="w-px bg-gray-300" />
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.align === 'center' ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ align: 'center' })}><AlignCenter size={13} /></button>
+                <div className="w-px bg-gray-300" />
+                <button className={`p-1 hover:bg-gray-100 transition-colors ${activeStyle.align === 'right' ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ align: 'right' })}><AlignRight size={13} /></button>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'Insert' && (
+            <>
+              <span className="text-[10px] uppercase font-bold text-zinc-500 px-1 select-none hidden md:inline">Cell Alterations</span>
+              <button 
+                onClick={handleInsertRowBelow}
+                className="flex items-center gap-1 bg-white hover:bg-zinc-200 p-1 px-2.5 rounded border border-zinc-300 text-xs text-zinc-700 font-semibold"
+                title="Add a new row below the currently selected cell"
+              >
+                <Plus size={13} />
+                <span>Insert Row Below</span>
+              </button>
+              
+              <button 
+                onClick={handleInsertColRight}
+                className="flex items-center gap-1 bg-white hover:bg-zinc-200 p-1 px-2.5 rounded border border-zinc-300 text-xs text-zinc-700 font-semibold"
+                title="Add a new column to the right of the currently selected cell"
+              >
+                <Plus size={13} />
+                <span>Insert Column Right</span>
+              </button>
+
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+              
+              <button 
+                onClick={() => {
+                  const coords = getActiveCellCoords();
+                  if (coords) deleteRow(coords.r);
+                }}
+                disabled={!activeCell}
+                className="flex items-center gap-1 bg-white hover:bg-red-50 disabled:opacity-40 p-1 px-2.5 rounded border border-zinc-300 text-xs text-red-600 font-semibold"
+              >
+                <span>Delete Active Row</span>
+              </button>
+            </>
+          )}
+
+          {activeTab === 'Data' && (
+            <>
+              <button 
+                onClick={() => { if(window.confirm("Do you want to clear the entire sheet data?")) { setData({}); setIsSaved(false); } }} 
+                className="bg-white hover:bg-zinc-200 p-1 px-2.5 rounded border border-zinc-300 text-xs font-semibold text-zinc-700"
+              >
+                Clean Values
+              </button>
+              
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+
+              <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-600">
+                <span>Rows:</span>
+                <input 
+                  type="number" 
+                  value={numRows} 
+                  onChange={(e) => { setNumRows(Math.max(5, parseInt(e.target.value) || 5)); setIsSaved(false); }} 
+                  className="w-12 bg-white border border-zinc-300 rounded px-1.5 py-0.5 text-center text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-600 ml-2">
+                <span>Cols:</span>
+                <input 
+                  type="number" 
+                  value={numCols} 
+                  onChange={(e) => { setNumCols(Math.max(3, parseInt(e.target.value) || 3)); setIsSaved(false); }} 
+                  className="w-12 bg-white border border-zinc-300 rounded px-1.5 py-0.5 text-center text-xs"
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 

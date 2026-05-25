@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { UploadCloud, Download, FileImage, Trash2, Layout, BookOpen, Layers, CheckSquare, Square, RotateCw, RotateCcw, Crop } from 'lucide-react';
+import { UploadCloud, Download, FileImage, Trash2, Layout, BookOpen, Layers, CheckSquare, Square, RotateCw, RotateCcw, Crop, ArrowLeft } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
 import { PDFPageRenderer } from './PDFPageRenderer';
@@ -9,7 +9,11 @@ import { PDFPageRenderer } from './PDFPageRenderer';
 // We need to set the worker source
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export function PDFConverter() {
+interface PDFConverterProps {
+  onBack: () => void;
+}
+
+export function PDFConverter({ onBack }: PDFConverterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [pages, setPages] = useState<{ url: string | null, pageNum: number }[]>([]);
@@ -232,94 +236,151 @@ export function PDFConverter() {
     setIsProcessing(false);
   };
 
+  const [activeTab, setActiveTab] = useState<'Convert' | 'Edit'>('Convert');
+
   return (
-    <div className="flex flex-col h-full bg-gray-50/50">
-      <div className="flex flex-col border-b border-gray-200 bg-white">
-        {/* Ribbon Header */}
-        <div className="flex items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <div className="flex space-x-6 text-xs sm:text-sm font-medium">
-            <span className="text-red-600 border-b-2 border-red-600 pb-2 -mb-[9px] px-1">Convert</span>
+    <div className="flex flex-col h-full bg-zinc-100 select-none relative animate-fade-in">
+      {/* 2-Row Consolidated Header & Ribbon Panel */}
+      <div className="sticky top-0 z-30 bg-white shadow-sm flex flex-col shrink-0 border-b border-gray-200">
+        
+        {/* Unified Title Bar / Row 1 */}
+        <div className="px-3 py-1.5 flex items-center justify-between bg-zinc-900 text-white shrink-0">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <button 
+              onClick={onBack} 
+              className="p-1 px-1.5 hover:bg-white/10 rounded-md text-gray-200 transition-colors flex items-center gap-1 shrink-0 active:scale-95"
+            >
+              <ArrowLeft size={16} />
+              <span className="text-xs font-medium hidden md:inline">Dashboard</span>
+            </button>
+            <div className="w-px h-4 bg-zinc-700 mx-1 block hidden md:block" />
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <FileImage size={15} className="text-red-500 fill-red-500 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wider text-red-400 hidden lg:inline shrink-0">PDF Toolkit</span>
+              <span className="text-xs sm:text-sm font-semibold truncate text-white">
+                {file ? file.name : 'PDF to Image Converter'}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick Tabs in Title Row */}
+          <div className="flex items-center gap-0.5 border-l border-zinc-700 ml-2 px-1">
+            {(['Convert', 'Edit'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`px-2 sm:px-3 py-0.5 text-xs font-bold rounded transition-all ${
+                  activeTab === tab 
+                    ? 'bg-red-600 text-white shadow-sm' 
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {file && (
+              <button 
+                onClick={() => { setFile(null); setPages([]); setPdf(null); }}
+                className="p-1 px-2.5 bg-zinc-800 hover:bg-red-950 text-red-400 rounded text-xs font-semibold flex items-center gap-1 transition-colors border border-red-950"
+              >
+                <Trash2 size={13} />
+                <span className="hidden sm:inline">Close File</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Ribbon Content */}
-        <div className="flex items-center gap-2 overflow-x-auto min-h-[48px] px-2 py-1.5 bg-gray-100/50">
-          {process ? (
-             <label className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-red-50 hover:text-red-700 hover:border-red-200 cursor-pointer transition-colors">
-               <UploadCloud size={16} />
-               <span>Upload PDF</span>
-               <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
-             </label>
-          ) : null}
-          
-          <div className="w-px h-6 bg-gray-300 mx-1 block" />
-          
-          <select 
-            value={format} 
-            onChange={(e) => setFormat(e.target.value as any)}
-            className="text-xs sm:text-sm bg-white border border-gray-300 rounded px-1.5 py-1 outline-none focus:border-red-500 shadow-sm"
-          >
-            <option value="image/jpeg">JPG Format</option>
-            <option value="image/png">PNG Format</option>
-          </select>
-          
-          <div className="w-px h-6 bg-gray-300 mx-1 block" />
-          
-          <button 
-            disabled={pages.length === 0}
-            onClick={handleSelectAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-gray-50 transition-all"
-          >
-            <Layers size={16} />
-            <span className="hidden sm:inline">{pages.length > 0 && selectedPages.size === pages.length ? 'Deselect All' : 'Select All'}</span>
-          </button>
-          
-          <button 
-            disabled={selectedPages.size === 0}
-            onClick={handleDownloadSelected}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">Download Selected {selectedPages.size > 0 && `(${selectedPages.size})`}</span>
-          </button>
-          
-          <button 
-            disabled={selectedPages.size === 0}
-            onClick={() => handleRotateSelected(-90)}
-            className="flex items-center gap-1.5 px-2 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            title="Rotate Left (CCW)"
-          >
-            <RotateCcw size={16} />
-          </button>
-          
-          <button 
-            disabled={selectedPages.size === 0}
-            onClick={() => handleRotateSelected(90)}
-            className="flex items-center gap-1.5 px-2 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            title="Rotate Right (CW)"
-          >
-            <RotateCw size={16} />
-          </button>
-          
-          <button 
-            disabled={selectedPages.size !== 1}
-            onClick={() => setCropPageNum(Array.from(selectedPages)[0])}
-            className="flex items-center gap-1.5 px-2 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            title="Crop selected page (Select 1 page only)"
-          >
-            <Crop size={16} />
-          </button>
-          
-          <div className="w-px h-6 bg-gray-300 mx-1 block" />
-          
-          <button 
-            disabled={!file}
-            onClick={() => { setFile(null); setPages([]); setPdf(null); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm text-xs font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            <Trash2 size={16} />
-            <span className="hidden sm:inline">Clear</span>
-          </button>
+        {/* Ribbon Active Content / Row 2 */}
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto hide-scrollbar min-h-[40px] max-h-[44px] px-3 py-1 bg-zinc-100 border-b border-zinc-200">
+          {activeTab === 'Convert' && (
+            <>
+              <label className="flex items-center gap-1.5 px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer transition-colors shrink-0">
+                <UploadCloud size={14} />
+                <span>Upload PDF</span>
+                <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
+              </label>
+              
+              <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+
+              <span className="text-[10px] uppercase font-bold text-zinc-500 px-1 select-none hidden lg:block">Export Settings</span>
+              
+              <select 
+                value={format} 
+                onChange={(e) => setFormat(e.target.value as any)}
+                className="text-xs bg-white border border-zinc-300 rounded px-1.5 py-0.5 outline-none font-semibold cursor-pointer text-zinc-700"
+              >
+                <option value="image/jpeg">JPG High Quality</option>
+                <option value="image/png">PNG Lossless</option>
+              </select>
+
+              {pages.length > 0 && (
+                <>
+                  <div className="w-px h-5 bg-zinc-300 mx-1 block flex-shrink-0" />
+                  
+                  <button 
+                    onClick={handleSelectAll}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-zinc-200 text-zinc-700 border border-zinc-300 rounded text-xs font-semibold transition-all shrink-0"
+                  >
+                    <Layers size={13} />
+                    <span>{selectedPages.size === pages.length ? 'Deselect All' : 'Select All'}</span>
+                  </button>
+                  
+                  <button 
+                    disabled={selectedPages.size === 0}
+                    onClick={handleDownloadSelected}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold focus:ring-2 focus:ring-green-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0"
+                  >
+                    <Download size={13} />
+                    <span>Download Selected {selectedPages.size > 0 && `(${selectedPages.size})`}</span>
+                  </button>
+                </>
+              )}
+            </>
+          )}
+
+          {activeTab === 'Edit' && (
+            <>
+              {selectedPages.size > 0 ? (
+                <>
+                  <span className="text-[10px] uppercase font-bold text-zinc-500 px-1 select-none hidden lg:block">Page Customizer ({selectedPages.size} selected)</span>
+                  <button 
+                    onClick={() => handleRotateSelected(-90)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-zinc-200 text-zinc-700 border border-zinc-300 rounded text-xs font-semibold transition-all shrink-0"
+                    title="Rotate Left (90 deg CCW)"
+                  >
+                    <RotateCcw size={13} />
+                    <span>Rotate CCW</span>
+                  </button>
+                  
+                  <button 
+                    onClick={() => handleRotateSelected(90)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-zinc-200 text-zinc-700 border border-zinc-300 rounded text-xs font-semibold transition-all shrink-0"
+                    title="Rotate Right (90 deg CW)"
+                  >
+                    <RotateCw size={13} />
+                    <span>Rotate CW</span>
+                  </button>
+                  
+                  <button 
+                    disabled={selectedPages.size !== 1}
+                    onClick={() => setCropPageNum(Array.from(selectedPages)[0])}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-white hover:bg-zinc-200 text-zinc-700 border border-zinc-300 disabled:opacity-40 rounded text-xs font-semibold transition-all shrink-0"
+                    title="Crop selected page"
+                  >
+                    <Crop size={13} />
+                    <span>Crop Page (1 selected)</span>
+                  </button>
+                </>
+              ) : (
+                <div className="text-xs text-zinc-500 italic px-2">
+                  Please select one or more pages from the previews below to access editing & cropping buttons.
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
       

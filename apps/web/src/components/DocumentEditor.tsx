@@ -14,7 +14,11 @@ import {
 type Tab = 'Edit' | 'Tools' | 'AI' | 'Metrics' | 'Layout' | 'Other';
 const TABS: Tab[] = ['Edit', 'Tools', 'AI', 'Metrics', 'Layout', 'Other'];
 
-export function DocumentEditor() {
+interface DocumentEditorProps {
+  onBack: () => void;
+}
+
+export function DocumentEditor({ onBack }: DocumentEditorProps) {
   const [title, setTitle] = useState(() => {
     return localStorage.getItem('wordscom_doc_title') || 'Untitled Document';
   });
@@ -690,7 +694,7 @@ export function DocumentEditor() {
   );
 
   return (
-    <div className="flex flex-col h-full min-h-[70vh] relative border border-gray-200 rounded-lg shadow-sm bg-white overflow-hidden">
+    <div className="flex flex-col h-full w-full relative bg-white overflow-hidden">
       {wordGoal > 0 && (
         <div className="absolute top-0 left-0 w-full h-1 bg-gray-100 z-20">
           <div 
@@ -702,33 +706,68 @@ export function DocumentEditor() {
       
       <div className="sticky top-0 z-30 bg-white w-full shadow-sm flex flex-col shrink-0 border-b border-gray-200">
         {!isFocusMode && (
-          <div className="px-4 py-2 flex items-center bg-gray-50/80">
-            <input
-              type="text"
-              value={title}
-              onChange={handleTitleChange}
-              className="text-lg font-semibold text-gray-900 border-0 focus:ring-0 p-0 outline-none w-full bg-transparent placeholder-gray-400"
-              placeholder="Document Title"
-            />
+          <div className="px-3 py-1.5 flex items-center justify-between bg-zinc-900 text-white shrink-0">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <button 
+                onClick={onBack} 
+                className="p-1 px-1.5 hover:bg-white/10 rounded-md text-gray-200 transition-colors flex items-center gap-1 shrink-0 active:scale-95"
+              >
+                <ArrowLeft size={16} />
+                <span className="text-xs font-medium hidden md:inline">Dashboard</span>
+              </button>
+              <div className="w-px h-4 bg-zinc-700 mx-1 block hidden md:block" />
+              <div className="flex items-center gap-1.5 overflow-hidden">
+                <FileText size={15} className="text-blue-500 fill-blue-500 shrink-0" />
+                <span className="text-xs font-bold uppercase tracking-wider text-blue-400 hidden lg:inline shrink-0">Word Editor</span>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={handleTitleChange}
+                  className="text-xs sm:text-sm font-semibold bg-transparent border-0 ring-0 focus:outline-none focus:ring-1 focus:ring-blue-500 px-1 py-0.5 rounded cursor-pointer w-[120px] sm:w-[180px] lg:w-[240px] truncate text-white placeholder-zinc-500 hover:bg-zinc-800"
+                  placeholder="Document Title"
+                />
+              </div>
+            </div>
+
+            {/* Ribbon Tabs integrated directly in Title Row! */}
+            <div className="flex items-center gap-0.5 border-l border-zinc-700 ml-2 px-1 overflow-x-auto hide-scrollbar">
+              {TABS.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-2 sm:px-3 py-0.5 text-xs font-bold rounded transition-all whitespace-nowrap ${
+                    activeTab === tab 
+                      ? 'bg-blue-600 text-white shadow-sm' 
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="hidden md:inline-block text-[10px] text-zinc-400">
+                {isSaved ? '● Saved' : '○ Unsaved'}
+              </span>
+              <button
+                onClick={handleSave}
+                disabled={isSaved}
+                className={`p-1 px-2.5 sm:py-1 text-xs rounded font-medium flex items-center gap-1 ${
+                  isSaved 
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow'
+                }`}
+              >
+                <Save size={13} />
+                <span className="hidden sm:inline">Save</span>
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Ribbon */}
-        <div className="bg-gray-50/50 flex flex-col">
-          {/* Tabs */}
-          <div className="flex overflow-x-auto hide-scrollbar border-b border-gray-200 px-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                activeTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        {/* Ribbon Content */}
+        <div className="bg-gray-50 flex flex-col">
 
         {/* Tab Content */}
         <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto hide-scrollbar min-h-[48px] px-2 py-1.5 bg-gray-100/50">
