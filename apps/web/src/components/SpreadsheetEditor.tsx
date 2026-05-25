@@ -509,7 +509,7 @@ export function SpreadsheetEditor() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-white select-none relative">
+    <div className="flex flex-col h-full bg-white select-none relative animate-fade-in">
       {/* Ribbon Header */}
       <div className="flex items-center px-4 py-2 bg-gray-50 border-b border-gray-200 shrink-0">
         <div className="flex space-x-6 text-xs sm:text-sm font-medium">
@@ -543,7 +543,7 @@ export function SpreadsheetEditor() {
         
         <div className="w-px h-8 bg-gray-300 mx-1 block" />
         
-        <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden">
+        <div className="flex bg-white border border-gray-300 rounded shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.bold ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ bold: !activeStyle.bold })}><Bold size={14} /></button>
           <div className="w-px bg-gray-300" />
           <button className={`p-1.5 hover:bg-gray-100 transition-colors ${activeStyle.italic ? 'bg-gray-200' : ''}`} onClick={() => updateActiveCellStyle({ italic: !activeStyle.italic })}><Italic size={14} /></button>
@@ -601,7 +601,7 @@ export function SpreadsheetEditor() {
           <input
             ref={formulaInputRef}
             type="text"
-            className="flex-1 bg-white border border-gray-300 px-2 py-1 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-100 shadow-inner rounded-sm w-full"
+            className="flex-1 bg-white border border-gray-300 px-2 py-1 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-100 shadow-inner rounded-sm w-full font-mono"
             value={activeCell && editingCell !== activeCell ? (data[activeCell]?.value || '') : editValue}
             onChange={handleCellChange}
             onKeyDown={(e) => {

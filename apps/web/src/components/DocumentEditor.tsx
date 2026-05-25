@@ -8,7 +8,7 @@ import {
   Wand2, Sparkles, MessageSquare, SpellCheck, Eraser, Printer, Trash2, Palette, Image as ImageIcon,
   FilePlus, Hash, FileText, Table as TableIcon, Search, X, Maximize, Minimize,
   ArrowUpDown, GripHorizontal, Subscript, Superscript,
-  ArrowUp, ArrowDown, Minus, Upload
+  ArrowUp, ArrowDown, Minus, Upload, Plus, Heading
 } from 'lucide-react';
 
 type Tab = 'Edit' | 'Tools' | 'AI' | 'Metrics' | 'Layout' | 'Other';
@@ -484,6 +484,135 @@ export function DocumentEditor() {
     exec('insertHTML', tableHtml);
   };
 
+  const addTableRow = (below: boolean) => {
+    if (!activeTableCell) return;
+    const tr = activeTableCell.closest('tr');
+    if (!tr) return;
+    const table = tr.closest('table');
+    if (!table) return;
+
+    const colCount = tr.cells.length;
+    const newRow = table.insertRow(below ? tr.rowIndex + 1 : tr.rowIndex);
+
+    for (let i = 0; i < colCount; i++) {
+      const newCell = newRow.insertCell();
+      newCell.style.border = '1px solid #d1d5db';
+      newCell.style.padding = '8px';
+      newCell.style.minWidth = '50px';
+      newCell.innerHTML = '<br>';
+    }
+
+    handleInput();
+  };
+
+  const addTableCol = (right: boolean) => {
+    if (!activeTableCell) return;
+    const cell = activeTableCell;
+    const tr = cell.closest('tr');
+    if (!tr) return;
+    const table = tr.closest('table');
+    if (!table) return;
+
+    const colIndex = cell.cellIndex;
+    const insertIndex = right ? colIndex + 1 : colIndex;
+
+    Array.from(table.rows).forEach((row) => {
+      const isHeaderCell = row.cells[0]?.tagName === 'TH';
+      const newCell = document.createElement(isHeaderCell ? 'th' : 'td');
+      newCell.style.border = '1px solid #d1d5db';
+      newCell.style.padding = '8px';
+      newCell.style.minWidth = '50px';
+      newCell.innerHTML = '<br>';
+
+      if (isHeaderCell) {
+        newCell.style.backgroundColor = '#1e293b';
+        newCell.style.color = '#ffffff';
+        newCell.style.fontWeight = 'bold';
+      }
+
+      if (insertIndex >= row.cells.length) {
+        row.appendChild(newCell);
+      } else {
+        row.insertBefore(newCell, row.cells[insertIndex]);
+      }
+    });
+
+    handleInput();
+  };
+
+  const deleteTableRow = () => {
+    if (!activeTableCell) return;
+    const tr = activeTableCell.closest('tr');
+    if (!tr) return;
+    const table = tr.closest('table');
+    if (!table) return;
+
+    if (table.rows.length <= 1) {
+      table.remove();
+      setActiveTableCell(null);
+    } else {
+      table.deleteRow(tr.rowIndex);
+      setActiveTableCell(null);
+    }
+    handleInput();
+  };
+
+  const deleteTableCol = () => {
+    if (!activeTableCell) return;
+    const cell = activeTableCell;
+    const tr = cell.closest('tr');
+    if (!tr) return;
+    const table = tr.closest('table');
+    if (!table) return;
+
+    const colIndex = cell.cellIndex;
+
+    if (tr.cells.length <= 1) {
+      table.remove();
+      setActiveTableCell(null);
+    } else {
+      Array.from(table.rows).forEach((row) => {
+        if (colIndex < row.cells.length) {
+          row.deleteCell(colIndex);
+        }
+      });
+      setActiveTableCell(null);
+    }
+    handleInput();
+  };
+
+  const convertToHeaderRow = () => {
+    if (!activeTableCell) return;
+    const table = activeTableCell.closest('table');
+    if (!table) return;
+
+    const firstRow = table.rows[0];
+    if (!firstRow) return;
+
+    const cells = Array.from(firstRow.cells);
+    cells.forEach((cell) => {
+      if (cell.tagName !== 'TH' && cell.tagName !== 'th') {
+        const th = document.createElement('th');
+        th.innerHTML = cell.innerHTML;
+        th.style.border = '1px solid #d1d5db';
+        th.style.padding = '8px';
+        th.style.minWidth = cell.style.minWidth || '50px';
+        th.style.backgroundColor = '#1e293b';
+        th.style.color = '#ffffff';
+        th.style.fontWeight = 'bold';
+        th.style.textAlign = cell.style.textAlign || 'center';
+        cell.replaceWith(th);
+      } else {
+        const th = cell as HTMLTableCellElement;
+        th.style.backgroundColor = '#1e293b';
+        th.style.color = '#ffffff';
+        th.style.fontWeight = 'bold';
+      }
+    });
+
+    handleInput();
+  };
+
   const handleFindNext = () => {
     if (!findText) return;
     const found = window.find(findText, false, false, true, false, false, false);
@@ -731,6 +860,12 @@ export function DocumentEditor() {
                        />
                     </div>
                   </div>
+                  <div className="flex items-center bg-gray-100 gap-0.5 p-1 rounded border border-gray-200 shadow-sm mx-1">
+                    <span className="text-[10px] sm:text-xs font-semibold text-gray-600 px-1">Table:</span>
+                    <RibbonButton icon={<Plus size={14} />} label="Add Row Below" onClick={() => addTableRow(true)} />
+                    <RibbonButton icon={<Plus size={14} />} label="Add Col Right" onClick={() => addTableCol(true)} />
+                    <RibbonButton icon={<Heading size={14} />} label="Header" onClick={convertToHeaderRow} />
+                  </div>
                   <div className="w-px h-6 bg-gray-300 mx-1 block" />
                  </>
               )}
@@ -897,6 +1032,18 @@ export function DocumentEditor() {
             <RibbonButton icon={<ArrowUp size={16} />} label="Top" onClick={() => { activeTableCell.style.verticalAlign = 'top'; handleInput(); }} />
             <RibbonButton icon={<Minus size={16} />} label="Middle" onClick={() => { activeTableCell.style.verticalAlign = 'middle'; handleInput(); }} />
             <RibbonButton icon={<ArrowDown size={16} />} label="Bottom" onClick={() => { activeTableCell.style.verticalAlign = 'bottom'; handleInput(); }} />
+            <div className="w-px h-4 bg-blue-200 mx-1 block" />
+            <span className="text-[10px] text-blue-500 font-semibold uppercase">Rows</span>
+            <RibbonButton icon={<Plus size={16} />} label="Add Row Below" onClick={() => addTableRow(true)} />
+            <RibbonButton icon={<Plus size={16} />} label="Add Row Above" onClick={() => addTableRow(false)} />
+            <RibbonButton icon={<Trash2 size={16} className="text-red-500" />} label="Delete Row" onClick={deleteTableRow} />
+            <div className="w-px h-4 bg-blue-200 mx-1 block" />
+            <span className="text-[10px] text-blue-500 font-semibold uppercase">Cols</span>
+            <RibbonButton icon={<Plus size={16} />} label="Add Col Right" onClick={() => addTableCol(true)} />
+            <RibbonButton icon={<Plus size={16} />} label="Add Col Left" onClick={() => addTableCol(false)} />
+            <RibbonButton icon={<Trash2 size={16} className="text-red-500" />} label="Delete Col" onClick={deleteTableCol} />
+            <div className="w-px h-4 bg-blue-200 mx-1 block" />
+            <RibbonButton icon={<Heading size={16} />} label="Header Row" onClick={convertToHeaderRow} />
           </div>
         )}
       </div>
