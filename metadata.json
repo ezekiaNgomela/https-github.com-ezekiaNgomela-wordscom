@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Document and Spreadsheet Editor",
+  "description": "An interactive full-stack workspace featuring a Document Editor with table customizers, a Spreadsheet Editor, and a PDF Converter.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
