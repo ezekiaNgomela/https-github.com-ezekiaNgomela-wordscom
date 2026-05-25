@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Save, Download, FileSpreadsheet, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Play, Square, ArrowLeft } from 'lucide-react';
+import { Save, Download, FileSpreadsheet, Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, Play, Square, ArrowLeft, Plus } from 'lucide-react';
 import { saveAs } from 'file-saver';
 
 // Helper to get column letter (A, B, ..., Z, AA, AB...)
@@ -527,6 +527,16 @@ export function SpreadsheetEditor({ onBack }: SpreadsheetEditorProps) {
     return { r: rNum, c: cNum };
   };
 
+  const handleInsertRowAbove = () => {
+    const coords = getActiveCellCoords();
+    if (coords) {
+      insertRowAbove(coords.r);
+    } else {
+      insertRowAbove(0);
+    }
+    setIsSaved(false);
+  };
+
   const handleInsertRowBelow = () => {
     const coords = getActiveCellCoords();
     if (coords) {
@@ -674,6 +684,15 @@ export function SpreadsheetEditor({ onBack }: SpreadsheetEditorProps) {
           {activeTab === 'Insert' && (
             <>
               <span className="text-[10px] uppercase font-bold text-zinc-500 px-1 select-none hidden md:inline">Cell Alterations</span>
+              <button 
+                onClick={handleInsertRowAbove}
+                className="flex items-center gap-1 bg-white hover:bg-zinc-200 p-1 px-2.5 rounded border border-zinc-300 text-xs text-zinc-700 font-semibold"
+                title="Add a new row above the currently selected cell"
+              >
+                <Plus size={13} />
+                <span>Insert Row Above</span>
+              </button>
+
               <button 
                 onClick={handleInsertRowBelow}
                 className="flex items-center gap-1 bg-white hover:bg-zinc-200 p-1 px-2.5 rounded border border-zinc-300 text-xs text-zinc-700 font-semibold"
