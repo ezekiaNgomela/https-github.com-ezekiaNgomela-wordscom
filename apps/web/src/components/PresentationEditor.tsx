@@ -305,6 +305,8 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
   const [isSaved, setIsSaved] = useState(true);
   const [showGuides, setShowGuides] = useState(true);
   const [showGridlines, setShowGridlines] = useState(false);
+  const [snapToGrid, setSnapToGrid] = useState(false);
+  const [activeAlignGuides, setActiveAlignGuides] = useState<{type: 'x'|'y', pos: number}[]>([]);
   const [themeFilter, setThemeFilter] = useState<'All' | 'Modern Glossy' | 'Vintage'>('All');
   
   // Element copy clipboard state
@@ -841,10 +843,78 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
     let nextW = dragState.startElementW;
     let nextH = dragState.startElementH;
 
+    let guides: {type: 'x'|'y', pos: number}[] = [];
+    const SNAP_THRESHOLD = 1.5;
+
     if (dragState.isDragging) {
       nextX = Math.max(0, Math.min(100 - dragState.startElementW, dragState.startElementX + dX));
       nextY = Math.max(0, Math.min(100 - dragState.startElementH, dragState.startElementY + dY));
+
+      if (snapToGrid) {
+        const gridX = 100 / 12;
+        const gridY = 100 / 6;
+        nextX = Math.round(nextX / gridX) * gridX;
+        nextY = Math.round(nextY / gridY) * gridY;
+      } else if (showGuides) {
+        const currEdges = {
+          x: [nextX, nextX + nextW/2, nextX + nextW],
+          y: [nextY, nextY + nextH/2, nextY + nextH]
+        };
+
+        const targetX: number[] = [0, 50, 100];
+        const targetY: number[] = [0, 50, 100];
+
+        activeSlide.elements.forEach(el => {
+          if (el.id !== dragState.elementId) {
+            targetX.push(el.x, el.x + el.w/2, el.x + el.w);
+            targetY.push(el.y, el.y + el.h/2, el.y + el.h);
+          }
+        });
+
+        let minDiffX = SNAP_THRESHOLD;
+        let snapX: number | null = null;
+        let guideX: number | null = null;
+        for (const tg of targetX) {
+          for (let i=0; i<3; i++) {
+            const diff = Math.abs(currEdges.x[i] - tg);
+            if (diff < minDiffX) {
+              minDiffX = diff;
+              guideX = tg;
+              if (i === 0) snapX = tg;
+              else if (i === 1) snapX = tg - nextW/2;
+              else if (i === 2) snapX = tg - nextW;
+            }
+          }
+        }
+        if (snapX !== null) {
+          nextX = Math.max(0, Math.min(100 - nextW, snapX));
+          guides.push({ type: 'x', pos: guideX! });
+        }
+
+        let minDiffY = SNAP_THRESHOLD;
+        let snapY: number | null = null;
+        let guideY: number | null = null;
+        for (const tg of targetY) {
+          for (let i=0; i<3; i++) {
+            const diff = Math.abs(currEdges.y[i] - tg);
+            if (diff < minDiffY) {
+              minDiffY = diff;
+              guideY = tg;
+              if (i === 0) snapY = tg;
+              else if (i === 1) snapY = tg - nextH/2;
+              else if (i === 2) snapY = tg - nextH;
+            }
+          }
+        }
+        if (snapY !== null) {
+          nextY = Math.max(0, Math.min(100 - nextH, snapY));
+          guides.push({ type: 'y', pos: guideY! });
+        }
+      }
+
       updateElement(dragState.elementId, { x: parseFloat(nextX.toFixed(1)), y: parseFloat(nextY.toFixed(1)) });
+      setActiveAlignGuides(guides);
+
     } else if (dragState.isResizing && dragState.handle) {
       const hd = dragState.handle;
       if (hd === 'se') {
@@ -868,17 +938,39 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
         nextY = Math.max(0, Math.min(dragState.startElementY + dragState.startElementH - 4, potentialY));
         nextH = Math.max(4, dragState.startElementH - (nextY - dragState.startElementY));
       }
+
+      if (snapToGrid) {
+        const gridX = 100 / 12;
+        const gridY = 100 / 6;
+        if (hd.includes('w')) {
+          nextX = Math.round(nextX / gridX) * gridX;
+          nextW = dragState.startElementW - (nextX - dragState.startElementX);
+        }
+        if (hd.includes('n')) {
+          nextY = Math.round(nextY / gridY) * gridY;
+          nextH = dragState.startElementH - (nextY - dragState.startElementY);
+        }
+        if (hd.includes('e')) {
+          nextW = Math.round((dragState.startElementX + nextW) / gridX) * gridX - dragState.startElementX;
+        }
+        if (hd.includes('s')) {
+          nextH = Math.round((dragState.startElementY + nextH) / gridY) * gridY - dragState.startElementY;
+        }
+      }
+
       updateElement(dragState.elementId, {
         x: parseFloat(nextX.toFixed(1)),
         y: parseFloat(nextY.toFixed(1)),
         w: parseFloat(nextW.toFixed(1)),
         h: parseFloat(nextH.toFixed(1))
       });
+      setActiveAlignGuides([]);
     }
   };
 
   const handleMouseUp = () => {
     setDragState(null);
+    setActiveAlignGuides([]);
   };
 
   const handleCommentSubmit = (e: React.FormEvent) => {
@@ -1610,13 +1702,22 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
                   <Grid size={11} />
                   <span>Smart Guides</span>
                 </button>
-                <button 
-                  onClick={() => setShowGridlines(!showGridlines)} 
-                  className={`p-1 px-2 text-[10px] font-bold rounded flex items-center gap-1 ${showGridlines ? 'bg-orange-600 text-white' : 'bg-zinc-800'}`}
-                >
-                  <Columns size={11} />
-                  <span>Gridlines</span>
-                </button>
+                <div className="flex flex-col gap-0.5">
+                  <button 
+                    onClick={() => setShowGridlines(!showGridlines)} 
+                    className={`p-1 px-2 text-[10px] font-bold rounded flex items-center gap-1 ${showGridlines ? 'bg-orange-600 text-white' : 'bg-zinc-800'}`}
+                  >
+                    <Columns size={11} />
+                    <span>Gridlines</span>
+                  </button>
+                  <button 
+                    onClick={() => setSnapToGrid(!snapToGrid)} 
+                    className={`p-1 px-2 text-[10px] font-bold rounded flex items-center gap-1 ${snapToGrid ? 'bg-orange-600 text-white' : 'bg-zinc-800'}`}
+                  >
+                    <Compass size={11} />
+                    <span>Snap</span>
+                  </button>
+                </div>
               </RibbonGroup>
             </>
           )}
@@ -1835,12 +1936,24 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
                 }}
               >
                 {/* Visual Guides overlay */}
-                {showGuides && (
-                  <div className="absolute inset-0 pointer-events-none select-none z-10">
+                {showGuides && activeAlignGuides.length === 0 && !dragState && (
+                  <div className="absolute inset-0 pointer-events-none select-none z-10 transition-opacity duration-300">
                     <div className="absolute top-1/2 inset-x-0 h-px border-t border-dashed border-orange-500/25" />
                     <div className="absolute left-1/2 inset-y-0 w-px border-l border-dashed border-orange-500/25" />
                   </div>
                 )}
+
+                {/* Active Alignment Smart Guides */}
+                {activeAlignGuides.map((guide, i) => (
+                  <div key={`guide-${i}`} className="absolute inset-0 pointer-events-none select-none z-20">
+                    {guide.type === 'x' && (
+                      <div className="absolute inset-y-0 w-px border-l border-solid border-orange-500" style={{ left: `${guide.pos}%`, boxShadow: '0 0 3px rgba(249,115,22,0.8)' }} />
+                    )}
+                    {guide.type === 'y' && (
+                      <div className="absolute inset-x-0 h-px border-t border-solid border-orange-500" style={{ top: `${guide.pos}%`, boxShadow: '0 0 3px rgba(249,115,22,0.8)' }} />
+                    )}
+                  </div>
+                ))}
 
                 {/* Construction grid lines */}
                 {showGridlines && (
