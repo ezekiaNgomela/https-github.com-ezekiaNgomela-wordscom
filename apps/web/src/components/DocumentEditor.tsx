@@ -57,7 +57,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
   // Layout Configuration
   const [marginSize, setMarginSize] = useState<'normal' | 'narrow' | 'moderate' | 'wide'>('normal');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
-  const [paperSize, setPaperSize] = useState<'letter' | 'a4' | 'legal'>('letter');
+  const [paperSize, setPaperSize] = useState<'letter' | 'a4' | 'legal'>('a4');
   const [columnsCount, setColumnsCount] = useState<number>(1);
 
   // References States
@@ -115,25 +115,45 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
   const [suggestion, setSuggestion] = useState<{ text: string, top: number, left: number, fullWord: string } | null>(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [activeTableCell, setActiveTableCell] = useState<HTMLTableCellElement | null>(null);
+  const [activeMaterial, setActiveMaterial] = useState<HTMLElement | null>(null);
   const [floatingMenu, setFloatingMenu] = useState<{ top: number; left: number; show: boolean } | null>(null);
+
+  const handleEditorClick = (e: React.MouseEvent) => {
+    let el = e.target as HTMLElement | null;
+    let foundMaterial = null;
+    while(el && el !== editorRef.current) {
+      if (el.classList && el.classList.contains('resizable-material')) {
+        foundMaterial = el;
+        break;
+      }
+      el = el.parentElement;
+    }
+    setActiveMaterial(foundMaterial);
+    updateSelectionState();
+  };
 
   const updateSelectionState = () => {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0 && editorRef.current) {
-      // Find active table cell
+      // Find active table cell or material
       let node: Node | null = selection.anchorNode;
       let foundTd: HTMLTableCellElement | null = null;
+      let foundMaterial: HTMLElement | null = null;
+      
       while (node && node !== editorRef.current) {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as HTMLElement;
           if (el.tagName === 'TD' || el.tagName === 'TH') {
             foundTd = el as HTMLTableCellElement;
-            break;
+          }
+          if (el.classList && el.classList.contains('resizable-material')) {
+            foundMaterial = el;
           }
         }
         node = node.parentNode;
       }
       setActiveTableCell(foundTd);
+      setActiveMaterial(foundMaterial);
 
       // Handle floating menu for text selection
       if (!selection.isCollapsed && editorRef.current.contains(selection.anchorNode)) {
@@ -217,7 +237,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
 
   const currentWords = textContent.trim() ? textContent.trim().split(/\s+/).length : 0;
   const progress = wordGoal > 0 ? Math.min((currentWords / wordGoal) * 100, 100) : 0;
-  const totalPages = Math.max(1, Math.ceil(editorHeight / 1056));
+  const totalPages = Math.max(1, Math.ceil(editorHeight / getPaperStyles().height));
 
   useEffect(() => {
     if (editorRef.current && content) {
@@ -1011,19 +1031,20 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
   };
 
   const getPaperStyles = () => {
-    let width = '816px';
-    let height = '1056px';
+    let width = 816;
+    let height = 1056;
     if (paperSize === 'a4') {
-      width = orientation === 'portrait' ? '794px' : '1123px';
-      height = orientation === 'portrait' ? '1123px' : '794px';
+      width = 794;
+      height = 1123;
     } else if (paperSize === 'legal') {
-      width = orientation === 'portrait' ? '816px' : '1344px';
-      height = orientation === 'portrait' ? '1344px' : '816px';
-    } else { // letter
-      width = orientation === 'portrait' ? '816px' : '1056px';
-      height = orientation === 'portrait' ? '1056px' : '816px';
+      width = 816;
+      height = 1344;
     }
-    return { maxWidth: width, minHeight: height };
+    if (orientation === 'landscape') {
+      const temp = width;
+      width = height; height = temp;
+    }
+    return { width, height };
   };
 
   const getThemePaletteColors = () => {
@@ -1349,7 +1370,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
                 <span className="text-[9px] uppercase font-bold text-gray-400 px-1 hidden lg:inline">Illustrations</span>
                 <RibbonButton icon={<ImageIcon size={14} />} label="Insert Image URL" onClick={() => {
                   const url = prompt("Enter image URL:");
-                  if (url) exec('insertImage', url);
+                  if (url) exec('insertHTML', `<div style="display:inline-block; resize:both; overflow:hidden; border: 1px dotted transparent; padding: 2px; max-width: 100%; min-width: 50px; min-height: 50px;" class="resizable-material" contenteditable="false"><img src="${url}" style="width:100%; height:100%; object-fit:contain; pointer-events:none;" /></div><p><br></p>`);
                 }} />
                 
                 <div className="w-px h-5 bg-gray-200 mx-0.5" />
@@ -2146,14 +2167,49 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
         className="flex-1 overflow-y-auto bg-gray-200/50 p-4 sm:p-8 flex justify-center w-full relative"
         onScroll={handleScroll}
       >
-        <div className="relative w-full max-w-[816px] shadow-md bg-white border border-gray-200">
+        <div className="relative w-full shadow-md bg-white border border-gray-200 transition-all duration-300 mx-auto" style={{ maxWidth: getPaperStyles().width }}>
+          
+          {/* Watermark Overlay */}
+          {watermark && (
+            <div className="absolute inset-0 pointer-events-none flex flex-col items-center overflow-hidden z-0 opacity-10">
+               {Array.from({ length: totalPages }).map((_, i) => (
+                 <div key={`watermark-${i}`} className="flex-none flex items-center justify-center w-full" style={{ height: getPaperStyles().height }}>
+                    <span className="text-[8rem] sm:text-[12rem] font-bold text-gray-800 uppercase tracking-widest -rotate-45 whitespace-nowrap opacity-50">
+                      {watermark}
+                    </span>
+                 </div>
+               ))}
+            </div>
+          )}
+
+          {/* Overlay Page Numbers & Visual Pagination lines */}
+          {showPageNumbers && Array.from({ length: totalPages }).map((_, i) => (
+            <React.Fragment key={`page-${i}`}>
+              <div 
+                className="absolute left-0 w-full flex justify-center pointer-events-none select-none print:hidden opacity-80 z-10"
+                style={{ top: `${(i + 1) * getPaperStyles().height - 24}px` }}
+              >
+                <span className="text-gray-400 text-xs font-semibold bg-gray-50 border border-gray-200 shadow-sm px-3 py-0.5 rounded-full z-20">Page {i + 1}</span>
+              </div>
+              <div 
+                className="absolute left-0 w-full border-b-[12px] border-double border-gray-200 pointer-events-none opacity-80 z-10 print:hidden bg-white/50"
+                style={{ top: `${(i + 1) * getPaperStyles().height - 6}px` }}
+              />
+            </React.Fragment>
+          ))}
+
           <div 
             ref={editorRef}
-            className={`w-full min-h-[1056px] p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
+            className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
+            style={{ 
+               minHeight: getPaperStyles().height,
+               backgroundColor: pageColor === '#ffffff' ? 'transparent' : pageColor
+            }}
             contentEditable
             spellCheck={spellCheckEnabled}
             onInput={handleInput}
             onMouseUp={updateSelectionState}
+            onClick={handleEditorClick}
             onKeyUp={updateSelectionState}
             onKeyDown={handleKeyDownLocal}
             data-placeholder="Start typing your document here..."
@@ -2208,6 +2264,49 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
             </div>
           )}
 
+          {/* Material Formatting Menu */}
+          {activeMaterial && (
+            <div 
+              className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg flex items-center px-1 py-1 gap-0.5 animate-in fade-in zoom-in-95 duration-150"
+              style={{
+                 top: `${Math.max(0, activeMaterial.offsetTop - 50)}px`,
+                 left: `${Math.max(0, activeMaterial.offsetLeft + activeMaterial.offsetWidth / 2)}px`,
+                 transform: 'translateX(-50%)'
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+               <button 
+                 className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1"
+                 title="Float Left (Wrap Text)" 
+                 onClick={() => { activeMaterial.style.float = 'left'; activeMaterial.style.margin = '0 15px 15px 0'; }}
+               >
+                 <AlignLeft size={14} /> Wrap L
+               </button>
+               <button 
+                 className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1"
+                 title="Float Right (Wrap Text)" 
+                 onClick={() => { activeMaterial.style.float = 'right'; activeMaterial.style.margin = '0 0 15px 15px'; }}
+               >
+                 <AlignRight size={14} /> Wrap R
+               </button>
+               <button 
+                 className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1"
+                 title="In Line (No Wrap)" 
+                 onClick={() => { activeMaterial.style.float = 'none'; activeMaterial.style.margin = '0'; }}
+               >
+                 <AlignCenter size={14} /> Inline
+               </button>
+               <div className="w-px h-4 bg-gray-300 mx-1 block" />
+               <button 
+                 className="p-1 px-1.5 hover:bg-red-50 text-red-600 rounded text-xs font-semibold"
+                 title="Delete Frame" 
+                 onClick={() => { activeMaterial.remove(); setActiveMaterial(null); handleInput(); }}
+               >
+                 Delete
+               </button>
+            </div>
+          )}
+
           {/* Autocomplete Suggestion */}
           {suggestion && (
             <div 
@@ -2218,24 +2317,6 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
               <span className="text-gray-400 bg-gray-700 px-1 rounded text-[10px]">Tab</span>
             </div>
           )}
-          
-          {/* Overlay Page Numbers & Visual Pagination lines */}
-          {showPageNumbers && Array.from({ length: totalPages }).map((_, i) => (
-            <React.Fragment key={i}>
-              <div 
-                className="absolute left-0 w-full flex justify-center pointer-events-none select-none print:hidden opacity-50 z-10"
-                style={{ top: `${(i + 1) * 1056 - 32}px` }}
-              >
-                <span className="text-gray-400 text-sm font-medium bg-white px-2">- {i + 1} -</span>
-              </div>
-              {i < totalPages - 1 && (
-                <div 
-                  className="absolute left-0 w-full border-b-2 border-dashed border-gray-300 pointer-events-none opacity-50 z-10"
-                  style={{ top: `${(i + 1) * 1056}px` }}
-                />
-              )}
-            </React.Fragment>
-          ))}
         </div>
       </div>
 

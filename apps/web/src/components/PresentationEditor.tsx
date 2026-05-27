@@ -304,6 +304,7 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
   const [editingTextElementId, setEditingTextElementId] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(true);
   const [showGuides, setShowGuides] = useState(true);
+  const [showAlignGuides, setShowAlignGuides] = useState(true);
   const [showGridlines, setShowGridlines] = useState(false);
   const [snapToGrid, setSnapToGrid] = useState(false);
   const [activeAlignGuides, setActiveAlignGuides] = useState<{type: 'x'|'y', pos: number}[]>([]);
@@ -855,7 +856,7 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
         const gridY = 100 / 6;
         nextX = Math.round(nextX / gridX) * gridX;
         nextY = Math.round(nextY / gridY) * gridY;
-      } else if (showGuides) {
+      } else if (showAlignGuides) {
         const currEdges = {
           x: [nextX, nextX + nextW/2, nextX + nextW],
           y: [nextY, nextY + nextH/2, nextY + nextH]
@@ -1695,13 +1696,22 @@ export function PresentationEditor({ onBack }: PresentationEditorProps) {
               </RibbonGroup>
 
               <RibbonGroup label="Design Helpers Overlay">
-                <button 
-                  onClick={() => setShowGuides(!showGuides)} 
-                  className={`p-1 px-2 text-[10px] font-bold rounded flex items-center gap-1 ${showGuides ? 'bg-orange-600 text-white' : 'bg-zinc-800'}`}
-                >
-                  <Grid size={11} />
-                  <span>Smart Guides</span>
-                </button>
+                <div className="flex flex-col gap-0.5">
+                  <button 
+                    onClick={() => setShowGuides(!showGuides)} 
+                    className={`p-1 px-2 text-[10px] font-bold rounded flex items-center gap-1 ${showGuides ? 'bg-orange-600 text-white' : 'bg-zinc-800'}`}
+                  >
+                    <Grid size={11} />
+                    <span>Smart Guides</span>
+                  </button>
+                  <button 
+                    onClick={() => setShowAlignGuides(!showAlignGuides)} 
+                    className={`p-1 px-2 text-[10px] font-bold rounded flex items-center gap-1 ${showAlignGuides ? 'bg-orange-600 text-white' : 'bg-zinc-800'}`}
+                  >
+                    <Layout size={11} />
+                    <span>Align Guides</span>
+                  </button>
+                </div>
                 <div className="flex flex-col gap-0.5">
                   <button 
                     onClick={() => setShowGridlines(!showGridlines)} 
