@@ -1,0 +1,23 @@
+{
+  "entities": {
+    "DocumentProcess": {
+      "title": "DocumentProcess",
+      "description": "A record of an AI document processing action",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "originalLength": { "type": "number" },
+        "processedLength": { "type": "number" }
+      },
+      "required": ["userId", "action", "timestamp", "originalLength", "processedLength"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/document_processes/{processId}": {
+      "schema": { "$ref": "#/entities/DocumentProcess" },
+      "description": "AI processes created by user"
+    }
+  }
+}

@@ -3,23 +3,64 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DocumentEditor } from './components/DocumentEditor';
 import { SpreadsheetEditor } from './components/SpreadsheetEditor';
 import { PDFConverter } from './components/PDFConverter';
 import { PresentationEditor } from './components/PresentationEditor';
 import { Dashboard } from './components/Dashboard';
-import { ArrowLeft, Edit3, Download } from 'lucide-react';
+import { Profile } from './components/Profile';
+import { ArrowLeft, Edit3, Download, LogOut, User as UserIcon } from 'lucide-react';
+import { signIn, logOut, auth } from './firebase';
+import { User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'dashboard' | 'doc' | 'xls' | 'pdf' | 'ppt' | 'view-doc' | 'view-xls' | 'view-pdf'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'doc' | 'xls' | 'pdf' | 'ppt' | 'view-doc' | 'view-xls' | 'view-pdf' | 'profile'>('dashboard');
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((u) => {
+      setUser(u);
+    });
+    return unsubscribe;
+  }, []);
 
   return (
     <div className="h-screen w-full bg-[#111111] overflow-hidden flex flex-col">
+      {/* Top Bar for Login */}
+      {activeView !== 'profile' && (
+        <div className="absolute top-4 right-4 z-50 flex items-center gap-4">
+          {user ? (
+            <button 
+              onClick={() => setActiveView('profile')}
+              className="flex items-center justify-center w-11 h-11 rounded-full bg-neutral-800 border-2 border-neutral-700 hover:border-neutral-500 overflow-hidden shadow-lg hover:shadow-neutral-700/50 transition-all hover:scale-105"
+            >
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon size={20} className="text-neutral-300" />
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={signIn}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-xl hover:shadow-blue-500/20 shadow-blue-900/20 border border-blue-500/50 hover:scale-105"
+            >
+              <UserIcon size={16} />
+              Sign In for AI Features
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Full screen layout for all devices without smartphone simulated border */}
       <div className="w-full h-full bg-[#111111] relative overflow-hidden flex flex-col">
         {activeView === 'dashboard' && (
           <Dashboard onOpenFile={(type) => setActiveView(type)} />
+        )}
+        
+        {activeView === 'profile' && (
+          <Profile user={user} onBack={() => setActiveView('dashboard')} />
         )}
         
         {activeView === 'view-doc' && (
@@ -41,7 +82,7 @@ export default function App() {
                  </button>
                </div>
              </div>
-             <div className="flex-1 overflow-auto bg-gray-100 p-4 relative pointer-events-none opacity-80" style={{ filter: 'grayscale(10%)' }}>
+             <div className="flex-1 overflow-auto bg-gray-100 p-4 relative">
                {/* Read-only preview mockup of the document */}
                <div className="max-w-[800px] mx-auto bg-white min-h-full p-8 shadow-sm border border-gray-200" dangerouslySetInnerHTML={{ __html: localStorage.getItem('wordscom_doc_content') || '<h1 style="text-align: center; color: #9ca3af; padding-top: 2rem;">Empty Document</h1>' }} id="preview-doc-box">
                </div>

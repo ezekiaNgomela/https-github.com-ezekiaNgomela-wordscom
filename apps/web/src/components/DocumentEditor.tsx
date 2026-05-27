@@ -380,6 +380,13 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     if (!editorRef.current) return;
     const content = editorRef.current.innerHTML;
     
+    // Check if user is logged in
+    const currentUser = (await import('../firebase')).auth.currentUser;
+    if (!currentUser) {
+      alert("Please sign in to use AI document refining features.");
+      return;
+    }
+
     if (!content || content.trim() === '') {
       alert("No content available for AI processing.");
       return;
@@ -387,6 +394,34 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     
     setIsProcessingAI(true);
     try {
+      const { db } = await import('../firebase');
+      const { doc: firestoreDoc, getDoc, setDoc } = await import('firebase/firestore');
+      
+      const userDocRef = firestoreDoc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      let isPremium = false;
+      let tokens = 50;
+      let premiumExpires = null;
+      
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        isPremium = data.isPremium || false;
+        tokens = data.tokens ?? 50;
+        premiumExpires = data.premiumExpires || null;
+      }
+      
+      if (isPremium && premiumExpires && Date.now() > premiumExpires) {
+         isPremium = false;
+         await setDoc(userDocRef, { isPremium: false }, { merge: true });
+      }
+
+      if (!isPremium && tokens <= 0) {
+         alert("You have run out of free AI Edit tokens. Please upgrade to Pro to continue processing documents.");
+         setIsProcessingAI(false);
+         return;
+      }
+
       const response = await fetch('/api/process-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -401,7 +436,26 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
       
       editorRef.current.innerHTML = data.result;
       handleInput();
-      alert(`AI processing complete (${action}).`);
+
+      if (!isPremium) {
+         await setDoc(userDocRef, { tokens: tokens - 1 }, { merge: true });
+      }
+
+      // Log process information
+      try {
+        const processId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        await setDoc(firestoreDoc(db, 'users', currentUser.uid, 'document_processes', processId), {
+          userId: currentUser.uid,
+          action: action,
+          timestamp: Date.now(),
+          originalLength: content.length,
+          processedLength: data.result.length
+        });
+      } catch (logErr) {
+        console.error("Failed to log process to Firestore", logErr);
+      }
+
+      alert(`AI processing complete (${action}). Refined document has been updated.`);
     } catch (err: any) {
       alert(`AI Processing Failed: ${err.message}`);
     } finally {
