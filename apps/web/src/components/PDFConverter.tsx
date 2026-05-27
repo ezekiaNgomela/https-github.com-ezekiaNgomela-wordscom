@@ -166,7 +166,7 @@ export function PDFConverter({ onBack }: PDFConverterProps) {
     
     if (selectedPages.size === 1) {
       // Just download the single file if only one is selected
-      const pageNum = Array.from(selectedPages)[0];
+      const pageNum = Array.from<number>(selectedPages)[0];
       const url = await getPageUrl(pageNum);
       if (url) handleDownload(url, pageNum);
       setIsProcessing(false);
@@ -174,7 +174,7 @@ export function PDFConverter({ onBack }: PDFConverterProps) {
     }
 
     const zip = new JSZip();
-    const toZip = Array.from(selectedPages);
+    const toZip = Array.from<number>(selectedPages);
     
     for (let pageNum of toZip) {
       const url = await getPageUrl(pageNum);

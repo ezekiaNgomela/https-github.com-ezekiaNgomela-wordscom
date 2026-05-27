@@ -9,7 +9,7 @@ import {
   FilePlus, Hash, FileText, Table as TableIcon, Search, X, Maximize, Minimize,
   ArrowUpDown, GripHorizontal, Subscript, Superscript,
   ArrowUp, ArrowDown, Minus, Upload, Plus, Heading, ArrowLeft, Rows, Shrink,
-  ChevronDown, Link, ExternalLink, Type, Settings, BookOpen, Bookmark, Languages, Eye, Shield, Lock, FileBox, Shuffle, ZoomIn, ZoomOut, Grid, HelpCircle, FileCheck, Check, Edit2, Play, Users, Landmark, Scissors, Copy, Clipboard, ListCollapse, StickyNote, FileSearch, Mail, BookMarked, PenTool, Award, History
+  ChevronDown, Link, ExternalLink, Type, Settings, BookOpen, Bookmark, Languages, Eye, Shield, Lock, LockOpen, FileBox, Shuffle, ZoomIn, ZoomOut, Grid, HelpCircle, FileCheck, Check, Edit2, Play, Users, Landmark, Scissors, Copy, Clipboard, ListCollapse, StickyNote, FileSearch, Mail, BookMarked, PenTool, Award, History
 } from 'lucide-react';
 
 type Tab = 'Home' | 'Insert' | 'Design' | 'Layout' | 'References' | 'Mailings' | 'Review' | 'View';
@@ -374,8 +374,39 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     }
   };
 
-  const mockAI = (action: string) => {
-    alert(`AI ${action} is currently a placeholder. In a full implementation, this would process the text and update the editor.`);
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
+
+  const processWithAI = async (action: string) => {
+    if (!editorRef.current) return;
+    const content = editorRef.current.innerHTML;
+    
+    if (!content || content.trim() === '') {
+      alert("No content available for AI processing.");
+      return;
+    }
+    
+    setIsProcessingAI(true);
+    try {
+      const response = await fetch('/api/process-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, content })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process document.');
+      }
+      
+      editorRef.current.innerHTML = data.result;
+      handleInput();
+      alert(`AI processing complete (${action}).`);
+    } catch (err: any) {
+      alert(`AI Processing Failed: ${err.message}`);
+    } finally {
+      setIsProcessingAI(false);
+    }
   };
 
   const handleDownload = () => {
@@ -400,11 +431,11 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     }
 
     const opt = {
-      margin:       [0.5, 0.5, 0.5, 0.5],
+      margin:       [0.5, 0.5, 0.5, 0.5] as [number, number, number, number],
       filename:     `${title.trim() || 'document'}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
+      image:        { type: 'jpeg' as const, quality: 0.98 },
       html2canvas:  { scale: 2, useCORS: true },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' as const }
     };
     
     // Clone node to strip non-printable attributes if needed, or just print directly
@@ -600,7 +631,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     const insertIndex = right ? colIndex + 1 : colIndex;
 
     Array.from(table.rows).forEach((row) => {
-      const isHeaderCell = row.cells[0]?.tagName === 'TH';
+      const isHeaderCell = (row as HTMLTableRowElement).cells[0]?.tagName === 'TH';
       const newCell = document.createElement(isHeaderCell ? 'th' : 'td');
       newCell.style.border = '1px solid #d1d5db';
       newCell.style.padding = '8px';
@@ -613,10 +644,10 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
         newCell.style.fontWeight = 'bold';
       }
 
-      if (insertIndex >= row.cells.length) {
-        row.appendChild(newCell);
+      if (insertIndex >= (row as HTMLTableRowElement).cells.length) {
+        (row as HTMLTableRowElement).appendChild(newCell);
       } else {
-        row.insertBefore(newCell, row.cells[insertIndex]);
+        (row as HTMLTableRowElement).insertBefore(newCell, (row as HTMLTableRowElement).cells[insertIndex]);
       }
     });
 
@@ -650,13 +681,13 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
 
     const colIndex = cell.cellIndex;
 
-    if (tr.cells.length <= 1) {
+    if ((tr as HTMLTableRowElement).cells.length <= 1) {
       table.remove();
       setActiveTableCell(null);
     } else {
       Array.from(table.rows).forEach((row) => {
-        if (colIndex < row.cells.length) {
-          row.deleteCell(colIndex);
+        if (colIndex < (row as HTMLTableRowElement).cells.length) {
+          (row as HTMLTableRowElement).deleteCell(colIndex);
         }
       });
       setActiveTableCell(null);
@@ -672,21 +703,22 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     const firstRow = table.rows[0];
     if (!firstRow) return;
 
-    const cells = Array.from(firstRow.cells);
+    const cells = Array.from((firstRow as HTMLTableRowElement).cells);
     cells.forEach((cell) => {
-      if (cell.tagName !== 'TH' && cell.tagName !== 'th') {
+      const cellEl = cell as HTMLTableCellElement;
+      if (cellEl.tagName !== 'TH' && cellEl.tagName !== 'th') {
         const th = document.createElement('th');
-        th.innerHTML = cell.innerHTML;
+        th.innerHTML = cellEl.innerHTML;
         th.style.border = '1px solid #d1d5db';
         th.style.padding = '8px';
-        th.style.minWidth = cell.style.minWidth || '50px';
+        th.style.minWidth = cellEl.style.minWidth || '50px';
         th.style.backgroundColor = '#1e293b';
         th.style.color = '#ffffff';
         th.style.fontWeight = 'bold';
-        th.style.textAlign = cell.style.textAlign || 'center';
-        cell.replaceWith(th);
+        th.style.textAlign = cellEl.style.textAlign || 'center';
+        cellEl.replaceWith(th);
       } else {
-        const th = cell as HTMLTableCellElement;
+        const th = cellEl;
         th.style.backgroundColor = '#1e293b';
         th.style.color = '#ffffff';
         th.style.fontWeight = 'bold';
@@ -1030,7 +1062,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     setDictionaryResult({ word: dictionaryWord, definition });
   };
 
-  const getPaperStyles = () => {
+  function getPaperStyles() {
     let width = 816;
     let height = 1056;
     if (paperSize === 'a4') {
@@ -1045,7 +1077,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
       width = height; height = temp;
     }
     return { width, height };
-  };
+  }
 
   const getThemePaletteColors = () => {
     const colors = {
@@ -1061,7 +1093,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
 
   const handleFindNext = () => {
     if (!findText) return;
-    const found = window.find(findText, false, false, true, false, false, false);
+    const found = (window as any).find(findText, false, false, true, false, false, false);
     if (!found) {
       alert('Text not found or end of document reached.');
     }
@@ -1097,7 +1129,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     selection?.addRange(range);
     
     let count = 0;
-    while (window.find(findText, false, false, true, false, false, false)) {
+    while ((window as any).find(findText, false, false, true, false, false, false)) {
       if (editorRef.current.contains(window.getSelection()?.anchorNode || null)) {
         document.execCommand('insertText', false, replaceText);
         count++;
@@ -1929,9 +1961,9 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
               {/* AI Writing Assistant */}
               <div className="flex items-center gap-0.5 bg-white/60 p-1 rounded border border-gray-200 shadow-sm shrink-0">
                 <span className="text-[9px] uppercase font-bold text-gray-400 px-1 hidden sm:inline">AI Writing</span>
-                <RibbonButton icon={<Wand2 size={14} className="text-purple-600 animate-pulse" />} label="Summarize" onClick={() => mockAI('Summarize')} />
-                <RibbonButton icon={<Sparkles size={14} className="text-purple-600" />} label="Refine Tone" onClick={() => mockAI('Refine Tone')} />
-                <RibbonButton icon={<MessageSquare size={14} className="text-purple-600" />} label="Draft Body Content" onClick={() => mockAI('Generate Body')} />
+                <RibbonButton icon={<Wand2 size={14} className={isProcessingAI ? "text-gray-400" : "text-purple-600 animate-pulse"} />} label={isProcessingAI ? "Processing" : "Summarize"} onClick={() => processWithAI('Summarize')} />
+                <RibbonButton icon={<Sparkles size={14} className={isProcessingAI ? "text-gray-400" : "text-purple-600"} />} label="Refine Tone" onClick={() => processWithAI('Refine Tone')} />
+                <RibbonButton icon={<MessageSquare size={14} className={isProcessingAI ? "text-gray-400" : "text-purple-600"} />} label="Draft Body Content" onClick={() => processWithAI('Generate Body')} />
               </div>
 
               {/* Dictionary query */}
@@ -2119,6 +2151,15 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
                     if(table) { table.classList.toggle('table-condensed'); handleInput(); } 
                 }} 
             />
+            <RibbonButton 
+                icon={<Grid size={13} />} 
+                label="Toggle Show Borders" 
+                active={activeTableCell?.closest('table')?.classList.contains('show-borders')} 
+                onClick={() => { 
+                    const table = activeTableCell.closest('table'); 
+                    if(table) { table.classList.toggle('show-borders'); handleInput(); } 
+                }} 
+            />
 
             <div className="w-px h-4 bg-blue-200 mx-1 block" />
             <span className="text-[10px] text-blue-600 font-bold uppercase">Grid:</span>
@@ -2197,7 +2238,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
         className="flex-1 overflow-y-auto bg-gray-200/50 p-4 sm:p-8 flex justify-center w-full relative"
         onScroll={handleScroll}
       >
-        <div className="relative w-full shadow-md bg-white border border-gray-200 transition-all duration-300 mx-auto" style={{ maxWidth: getPaperStyles().width }}>
+        <div className={`relative shadow-md bg-white border border-gray-200 transition-all duration-300 mx-auto ${viewMode === 'web' || viewMode === 'read' ? 'w-full max-w-5xl' : ''}`} style={{ maxWidth: viewMode === 'print' ? getPaperStyles().width : undefined }}>
           
           {/* Watermark Overlay */}
           {watermark && (
@@ -2213,24 +2254,24 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
           )}
 
           {/* Overlay Page Numbers & Visual Pagination lines */}
-          {showPageNumbers && Array.from({ length: totalPages }).map((_, i) => (
+          {viewMode === 'print' && showPageNumbers && Array.from({ length: totalPages }).map((_, i) => (
             <React.Fragment key={`page-${i}`}>
               <div 
-                className="absolute left-0 w-full flex justify-center pointer-events-none select-none print:hidden opacity-80 z-10"
-                style={{ top: `${(i + 1) * getPaperStyles().height - 24}px` }}
+                className="absolute -left-12 sm:-left-16 w-12 flex justify-end pointer-events-none select-none print:hidden opacity-80 z-20"
+                style={{ top: `${(i + 1) * getPaperStyles().height - 8}px` }}
               >
-                <span className="text-gray-400 text-xs font-semibold bg-gray-50 border border-gray-200 shadow-sm px-3 py-0.5 rounded-full z-20">Page {i + 1}</span>
+                <span className="text-gray-400 text-[10px] font-bold tracking-wider">PG {i + 1}</span>
               </div>
               <div 
-                className="absolute left-0 w-full border-b-[12px] border-double border-gray-200 pointer-events-none opacity-80 z-10 print:hidden bg-white/50"
-                style={{ top: `${(i + 1) * getPaperStyles().height - 6}px` }}
+                className="absolute left-0 w-full border-b border-dashed border-gray-300 pointer-events-none opacity-60 z-10 print:hidden"
+                style={{ top: `${(i + 1) * getPaperStyles().height}px` }}
               />
             </React.Fragment>
           ))}
 
           <div 
             ref={editorRef}
-            className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 [&_table.table-striped_tr:nth-child(even)_td]:!bg-gray-100/50 [&_table.table-bold-header_tr:first-child_td]:!bg-gray-100 [&_table.table-bold-header_tr:first-child_td]:!font-bold [&_table.table-condensed_td]:!p-1 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
+            className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 [&_table.table-striped_tr:nth-child(even)_td]:!bg-gray-100/50 [&_table.table-bold-header_tr:first-child_td]:!bg-gray-100 [&_table.table-bold-header_tr:first-child_td]:!font-bold [&_table.table-condensed_td]:!p-1 [&_table.show-borders]:!border [&_table.show-borders]:!border-gray-400 [&_table.show-borders_td]:!border [&_table.show-borders_td]:!border-gray-400 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
             style={{ 
                minHeight: getPaperStyles().height,
                backgroundColor: pageColor === '#ffffff' ? 'transparent' : pageColor

@@ -7,8 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build"
+    "dev": "node dev-server.mjs",
+    "build": "turbo run build",
+    "start": "node server.mjs"
   },
   "devDependencies": {
     "@types/file-saver": "^2.0.7",
@@ -16,7 +17,11 @@
     "turbo": "^2.5.0"
   },
   "dependencies": {
+    "@google/genai": "^2.6.0",
     "@jspreadsheet/react": "^12.5.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
     "file-saver": "^2.0.5",
     "html-docx-js": "^0.3.1",
     "html-to-docx": "^1.8.0",
