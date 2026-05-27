@@ -8,7 +8,7 @@ import {
   Wand2, Sparkles, MessageSquare, SpellCheck, Eraser, Printer, Trash2, Palette, Image as ImageIcon,
   FilePlus, Hash, FileText, Table as TableIcon, Search, X, Maximize, Minimize,
   ArrowUpDown, GripHorizontal, Subscript, Superscript,
-  ArrowUp, ArrowDown, Minus, Upload, Plus, Heading, ArrowLeft,
+  ArrowUp, ArrowDown, Minus, Upload, Plus, Heading, ArrowLeft, Rows, Shrink,
   ChevronDown, Link, ExternalLink, Type, Settings, BookOpen, Bookmark, Languages, Eye, Shield, Lock, FileBox, Shuffle, ZoomIn, ZoomOut, Grid, HelpCircle, FileCheck, Check, Edit2, Play, Users, Landmark, Scissors, Copy, Clipboard, ListCollapse, StickyNote, FileSearch, Mail, BookMarked, PenTool, Award, History
 } from 'lucide-react';
 
@@ -2091,6 +2091,36 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
             </div>
 
             <div className="w-px h-4 bg-blue-200 mx-1 block" />
+            <span className="text-[10px] text-blue-600 font-bold uppercase">Presets:</span>
+            <RibbonButton 
+                icon={<Rows size={13} />} 
+                label="Striped Rows" 
+                active={activeTableCell?.closest('table')?.classList.contains('table-striped')} 
+                onClick={() => { 
+                    const table = activeTableCell.closest('table'); 
+                    if(table) { table.classList.toggle('table-striped'); handleInput(); } 
+                }} 
+            />
+            <RibbonButton 
+                icon={<Heading size={13} />} 
+                label="Bold Header" 
+                active={activeTableCell?.closest('table')?.classList.contains('table-bold-header')} 
+                onClick={() => { 
+                    const table = activeTableCell.closest('table'); 
+                    if(table) { table.classList.toggle('table-bold-header'); handleInput(); } 
+                }} 
+            />
+            <RibbonButton 
+                icon={<Shrink size={13} />} 
+                label="Condensed Layout" 
+                active={activeTableCell?.closest('table')?.classList.contains('table-condensed')} 
+                onClick={() => { 
+                    const table = activeTableCell.closest('table'); 
+                    if(table) { table.classList.toggle('table-condensed'); handleInput(); } 
+                }} 
+            />
+
+            <div className="w-px h-4 bg-blue-200 mx-1 block" />
             <span className="text-[10px] text-blue-600 font-bold uppercase">Grid:</span>
             <RibbonButton icon={<Plus size={13} />} label="Add Row Above" onClick={() => addTableRow(false)} />
             <RibbonButton icon={<Plus size={13} />} label="Add Row Below" onClick={() => addTableRow(true)} />
@@ -2200,7 +2230,7 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
 
           <div 
             ref={editorRef}
-            className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
+            className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 [&_table.table-striped_tr:nth-child(even)_td]:!bg-gray-100/50 [&_table.table-bold-header_tr:first-child_td]:!bg-gray-100 [&_table.table-bold-header_tr:first-child_td]:!font-bold [&_table.table-condensed_td]:!p-1 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
             style={{ 
                minHeight: getPaperStyles().height,
                backgroundColor: pageColor === '#ffffff' ? 'transparent' : pageColor
