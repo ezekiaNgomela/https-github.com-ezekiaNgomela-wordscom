@@ -11,52 +11,61 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-app.post('/api/process-document', async (req, res) => {
+
+const buildPrompt = (command, content, message = '') => {
+  const commands = {
+    rewrite: 'Rewrite this document so it is clearer, tighter, and easier to read.',
+    formal: 'Rewrite this document in a formal, professional tone with strong business writing.',
+    summarize: 'Summarize this document into a concise executive summary with clear takeaways.',
+    expand: 'Expand this draft with useful details, examples, and smooth transitions.',
+    table: 'Turn the relevant content into a clean, useful table and keep supporting context.',
+    proposal: 'Create a polished startup proposal with sections, headings, bullet points, timeline, and next steps.',
+  };
+
+  if (command === 'chat') {
+    return `User request: ${message}\n\nDocument HTML:\n${content}\n\nReturn only the improved document HTML.`;
+  }
+
+  return `${commands[command] ?? message}\n\nDocument HTML:\n${content}\n\nReturn only semantic HTML with headings, paragraphs, lists, and tables when useful.`;
+};
+
+const processAiDocument = async (req, res) => {
   try {
-    const { action, content } = req.body;
+    const { command, content, message } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is missing.' });
+      return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is missing. Add it to .env.local to enable AI processing.' });
     }
 
+    const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey });
-    
-    let systemInstruction = "You are a professional document editing assistant. Your task is to output the final modified HTML content only, stripped of any markdown formatting (like ```html), preserving the general HTML structure but improving the content as requested.";
-    let prompt = "";
-
-    switch (action) {
-      case 'Summarize':
-         prompt = `Provide a concise, professional summary of the core concepts in this document. Replace the document content with this clear, easy-to-read summary:\n\n${content}`;
-         break;
-      case 'Refine Tone':
-         prompt = `Rewrite the following document to have a highly professional, worldwide-recommended standard tone. Fix any grammar and structural issues while keeping the core meaning. Output the formatted HTML:\n\n${content}`;
-         break;
-      case 'Generate Body':
-         prompt = `Please expand on the given document structure. Write comprehensive body paragraphs, correct grammar inconsistencies, and format the output professionally in HTML:\n\n${content}`;
-         break;
-      default:
-         return res.status(400).json({ error: 'Invalid action.' });
-    }
-
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt,
+      contents: buildPrompt(command, content, message),
       config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.2
-      }
+        systemInstruction: 'You are WordCom, an AI-native document workspace. Transform user intent into polished, structured HTML documents. Return only document HTML; do not wrap output in markdown fences.',
+        temperature: 0.25,
+      },
     });
 
-    let formattedContent = response.text() || '';
-    // Strip markdown tags if Gemini wrapping occurred
-    formattedContent = formattedContent.replace(/```html/g, '').replace(/```/g, '').trim();
-    
-    res.json({ result: formattedContent });
-
+    const result = (response.text() || '').replace(/```html/g, '').replace(/```/g, '').trim();
+    res.json({ result });
   } catch (error) {
     console.error('Error processing document:', error);
     res.status(500).json({ error: error.message || 'Error communicating with AI.' });
   }
+};
+
+app.post('/api/ai/document', processAiDocument);
+
+app.post('/api/process-document', async (req, res) => {
+  const actionMap = {
+    'Summarize': 'summarize',
+    'Refine Tone': 'formal',
+    'Generate Body': 'expand',
+  };
+  req.body.command = actionMap[req.body.action] ?? req.body.action;
+  await processAiDocument(req, res);
 });
 
 // For production, serve the Vite build
