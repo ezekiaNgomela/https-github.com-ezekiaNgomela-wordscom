@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { ArrowLeft, LogOut, CheckCircle2, Zap, CreditCard, Smartphone, User as UserIcon, Download } from 'lucide-react';
+import { ArrowLeft, LogOut, CheckCircle2, Zap, CreditCard, Smartphone, User as UserIcon, Download, FileJson } from 'lucide-react';
 import { logOut, db } from '../firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import html2pdf from 'html2pdf.js';
@@ -30,6 +30,19 @@ export function Profile({ user, onBack }: ProfileProps) {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [isLoadingPayments, setIsLoadingPayments] = useState(true);
+  const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
+
+  const filteredPaymentHistory = paymentHistory.filter(payment => {
+    const query = paymentSearchQuery.toLowerCase().trim();
+    if (!query) return true;
+    
+    const matchesId = payment.id && payment.id.toLowerCase().includes(query);
+    const matchesAmount = payment.amount.toString().includes(query) || 
+                          `${payment.amount} ${payment.currency}`.toLowerCase().includes(query);
+    const matchesMethod = payment.method && payment.method.toLowerCase().includes(query);
+    
+    return matchesId || matchesAmount || matchesMethod;
+  });
 
   // Fetch or setup basic mock user record for subscription status
   useEffect(() => {
@@ -149,6 +162,19 @@ export function Profile({ user, onBack }: ProfileProps) {
     };
 
     html2pdf().set(opt).from(receiptElement).save();
+  };
+
+  const handleExportJSON = (payment: Payment) => {
+    const jsonString = JSON.stringify(payment, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `receipt_${payment.id}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const daysLeft = premiumExpires ? Math.max(0, Math.ceil((premiumExpires - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
@@ -281,10 +307,35 @@ export function Profile({ user, onBack }: ProfileProps) {
 
         {/* Payment History Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-12">
-          <div className="p-8 border-b border-gray-100 flex items-center justify-between">
+          <div className="p-8 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <CreditCard size={24} className="text-emerald-600" /> Payment History
             </h2>
+            {paymentHistory.length > 0 && (
+              <div className="relative w-full sm:w-80">
+                <input
+                  type="text"
+                  id="payment-search"
+                  value={paymentSearchQuery}
+                  onChange={(e) => setPaymentSearchQuery(e.target.value)}
+                  placeholder="Search by payment ID or amount..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50 text-sm font-medium transition-all"
+                />
+                <svg
+                  className="absolute left-3.5 top-2.5 h-5 w-5 text-gray-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+            )}
           </div>
           <div className="p-0">
             {isLoadingPayments ? (
@@ -297,9 +348,29 @@ export function Profile({ user, onBack }: ProfileProps) {
                 <p className="font-medium text-gray-600">No payment history yet</p>
                 <p className="text-sm">Your past subscriptions will appear here.</p>
               </div>
+            ) : filteredPaymentHistory.length === 0 ? (
+              <div className="p-12 text-center text-gray-500 flex flex-col items-center">
+                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-300">
+                  <svg
+                    className="h-8 w-8 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                </div>
+                <p className="font-medium text-gray-600">No matching payments found</p>
+                <p className="text-sm mt-1">Try adjusting your search query or typing a different term.</p>
+              </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {paymentHistory.map((payment) => (
+                {filteredPaymentHistory.map((payment) => (
                   <div key={payment.id} className="payment-history-item">
                     <div className="flex items-start sm:items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
@@ -309,14 +380,16 @@ export function Profile({ user, onBack }: ProfileProps) {
                         <p className="font-bold text-gray-900 mb-0.5">
                           {payment.amount.toLocaleString()} {payment.currency}
                         </p>
-                        <p className="text-sm text-gray-500 flex items-center gap-2">
+                        <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
                           <span className="capitalize">{payment.method === 'bank' ? 'Bank Transfer' : payment.method}</span>
                           <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                          {new Date(payment.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                          <span>ID: {payment.id}</span>
+                          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                          <span>{new Date(payment.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 self-start sm:self-auto ml-14 sm:ml-0">
+                    <div className="flex items-center gap-3 self-end sm:self-auto ml-14 sm:ml-0">
                       <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider rounded-full border border-emerald-100">
                         {payment.status}
                       </span>
@@ -328,6 +401,15 @@ export function Profile({ user, onBack }: ProfileProps) {
                       >
                         <Download size={14} className="shrink-0" />
                         <span>Download</span>
+                      </button>
+                      <button 
+                        id={`export-json-btn-${payment.id}`}
+                        onClick={() => handleExportJSON(payment)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 font-bold text-xs rounded-lg border border-gray-200 hover:border-emerald-200 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+                        title="Export details to JSON"
+                      >
+                        <FileJson size={14} className="shrink-0" />
+                        <span>Export JSON</span>
                       </button>
                     </div>
                   </div>

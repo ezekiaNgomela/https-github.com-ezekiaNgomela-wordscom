@@ -24,11 +24,11 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     return localStorage.getItem('wordscom_doc_title') || 'Untitled Document';
   });
   const [content, setContent] = useState(() => {
-    return localStorage.getItem('wordscom_doc_content') || '';
+    return localStorage.getItem('wordscom_doc_content') || `<h1>Welcome to your AI-Powered Word Editor</h1><p>This is a modern, responsive full-stack document production suite configured with robust inline AI intelligence and layout features.</p><h2>💡 Intelligence & Markdown Auto-formatting</h2><p>Our document workspace detects standard markdown shortcuts on the fly! Try typing these directly inside the canvas:</p><ul><li>Type <b>#</b> followed by a Space to automatically create a Heading 1 format.</li><li>Type <b>##</b> followed by a Space to create a Heading 2 format.</li><li>Type <b>###</b> followed by a Space to create a Heading 3 format.</li><li>Type <b>*</b> or <b>-</b> followed by Space to start an Unordered Bullet List.</li><li>Type <b>1.</b> followed by Space to initiate a Numbered Ordered List.</li></ul><h2>🔮 AI Command Shortcuts & Co-Writing Sidebar</h2><p>You can call our specialized generative features directly while writing:</p><ul><li>Type a <b>/</b> slash anywhere in the script to invoke the <b>Inline Commands drop-down</b> (supporting <i>/rewrite</i>, <i>/expand</i>, <i>/summarize</i>, and more!).</li><li>Click <b>AI Assist</b> in the top bar to toggle the conversation panel on the right side. You can ask queries, select quick presets, and easily insert response sections directly into your active page.</li><li>Select any portion of text to bring up the contextual float toolbar to format styles or colors.</li></ul><h2>📑 Dynamic Navigator Outline</h2><p>Notice the left sidebar? Our system features real-time <b>Auto Heading Detection</b>. As soon as you add or alter headings in this canvas, the Navigator index updates dynamically, allowing you to click nodes to smoothly scroll to any section.</p>`;
   });
   const [textContent, setTextContent] = useState(() => {
     const div = document.createElement('div');
-    div.innerHTML = localStorage.getItem('wordscom_doc_content') || '';
+    div.innerHTML = localStorage.getItem('wordscom_doc_content') || `<h1>Welcome to your AI-Powered Word Editor</h1><p>This is a modern, responsive full-stack document production suite configured with robust inline AI intelligence and layout features.</p><h2>💡 Intelligence & Markdown Auto-formatting</h2><p>Our document workspace detects standard markdown shortcuts on the fly! Try typing these directly inside the canvas:</p><ul><li>Type <b>#</b> followed by a Space to automatically create a Heading 1 format.</li><li>Type <b>##</b> followed by a Space to create a Heading 2 format.</li><li>Type <b>###</b> followed by a Space to create a Heading 3 format.</li><li>Type <b>*</b> or <b>-</b> followed by Space to start an Unordered Bullet List.</li><li>Type <b>1.</b> followed by Space to initiate a Numbered Ordered List.</li></ul><h2>🔮 AI Command Shortcuts & Co-Writing Sidebar</h2><p>You can call our specialized generative features directly while writing:</p><ul><li>Type a <b>/</b> slash anywhere in the script to invoke the <b>Inline Commands drop-down</b> (supporting <i>/rewrite</i>, <i>/expand</i>, <i>/summarize</i>, and more!).</li><li>Click <b>AI Assist</b> in the top bar to toggle the conversation panel on the right side. You can ask queries, select quick presets, and easily insert response sections directly into your active page.</li><li>Select any portion of text to bring up the contextual float toolbar to format styles or colors.</li></ul><h2>📑 Dynamic Navigator Outline</h2><p>Notice the left sidebar? Our system features real-time <b>Auto Heading Detection</b>. As soon as you add or alter headings in this canvas, the Navigator index updates dynamically, allowing you to click nodes to smoothly scroll to any section.</p>`;
     return div.innerText || '';
   });
   const [wordGoal, setWordGoal] = useState(() => {
@@ -117,6 +117,177 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
   const [activeTableCell, setActiveTableCell] = useState<HTMLTableCellElement | null>(null);
   const [activeMaterial, setActiveMaterial] = useState<HTMLElement | null>(null);
   const [floatingMenu, setFloatingMenu] = useState<{ top: number; left: number; show: boolean } | null>(null);
+
+  // 3-Panel AI Shell States
+  const [showLeftPane, setShowLeftPane] = useState(true);
+  const [showRightPane, setShowRightPane] = useState(true);
+  const [detectedHeadings, setDetectedHeadings] = useState<{ id: string; text: string; level: number; index: number }[]>([]);
+  const [aiChatHistory, setAiChatHistory] = useState<{ role: 'user' | 'model'; text: string }[]>([
+    {
+      role: 'model',
+      text: "Hello! I am your AI Co-Writer. I can help you draft sections, summarize ideas, or rewrite copy. Write in the chat panel, use the slash commands `/` in the editor, or select text and use the floating AI toolbar!"
+    }
+  ]);
+  const [aiChatQuery, setAiChatQuery] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [showSlashPopover, setShowSlashPopover] = useState(false);
+  const [slashPopoverPos, setSlashPopoverPos] = useState({ top: 0, left: 0 });
+
+  const SLASH_COMMANDS = [
+    { cmd: '/rewrite', label: 'AI Rewrite', desc: 'Polish grammar & style', action: 'Rewrite' },
+    { cmd: '/expand', label: 'AI Expand', desc: 'Add details & expand content', action: 'Expand' },
+    { cmd: '/summarize', label: 'AI Summarize', desc: 'Create brief summary of block', action: 'Summarize' },
+    { cmd: '/formal', label: 'Make Formal', desc: 'Convert block to business style', action: 'Formal' },
+    { cmd: '/proposal', label: 'Draft Proposal', desc: 'Draft business proposal section', action: 'Proposal' }
+  ];
+
+  // Helper to scroll to specific heading
+  const scrollToHeading = (id: string) => {
+    if (!editorRef.current) return;
+    const el = editorRef.current.querySelector(`#${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  // Helper to insert text at cursor
+  const handleInsertTextAtCursor = (textToInsert: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      
+      const textNode = document.createTextNode(textToInsert);
+      range.insertNode(textNode);
+      
+      // Move cursor after the inserted text
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      // Append if no selection/cursor active
+      editorRef.current.innerHTML += `<p>${textToInsert}</p>`;
+    }
+    handleInput();
+  };
+
+  // Helper to replace selection or whole block
+  const handleReplaceSelectionWithText = (newText: string) => {
+    if (!editorRef.current) return;
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const node = document.createTextNode(newText);
+      range.insertNode(node);
+      selection.removeAllRanges();
+      const newRange = document.createRange();
+      newRange.selectNodeContents(node);
+      selection.addRange(newRange);
+    } else {
+      // Replace entire editor contents if nothing is selected
+      editorRef.current.innerHTML = `<p>${newText}</p>`;
+    }
+    handleInput();
+  };
+
+  // Send Preset message directly to chat AI
+  const handleSendPresetMessage = (presetText: string) => {
+    setAiChatQuery(presetText);
+    setTimeout(() => {
+      triggerAiChat(presetText);
+    }, 100);
+  };
+
+  // Run AI chat
+  const triggerAiChat = async (queryText: string) => {
+    const textToProcess = queryText.trim();
+    if (!textToProcess) return;
+
+    setAiChatHistory(prev => [...prev, { role: 'user', text: textToProcess }]);
+    setAiChatQuery('');
+    setIsAiLoading(true);
+
+    try {
+      const docContext = editorRef.current?.innerHTML || '';
+      const response = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: textToProcess,
+          contextContent: docContext,
+          conversationHistory: aiChatHistory.map(m => ({ role: m.role, text: m.text }))
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to communicate with AI sidekick.');
+      }
+
+      setAiChatHistory(prev => [...prev, { role: 'model', text: data.result || 'No response returned.' }]);
+    } catch (err: any) {
+      setAiChatHistory(prev => [...prev, { role: 'model', text: `Error: ${err.message}` }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Handle AI Chat submit
+  const handleSendAiMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    triggerAiChat(aiChatQuery);
+  };
+
+  // Handle Slash Command click
+  const handleSlashCommandClick = async (action: string) => {
+    setShowSlashPopover(false);
+    if (!editorRef.current) return;
+
+    const selectionText = window.getSelection()?.toString() || '';
+    const contentToUse = selectionText || editorRef.current.innerHTML;
+
+    setAiChatHistory(prev => [...prev, { role: 'user', text: `Slash command: /${action.toLowerCase()} on selected content.` }]);
+    setIsAiLoading(true);
+
+    try {
+      const response = await fetch('/api/process-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: action === 'Formal' ? 'Refine Tone' : action === 'Proposal' ? 'Generate Body' : action,
+          content: contentToUse
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process slash command.');
+      }
+
+      const resultText = data.result || '';
+      
+      setAiChatHistory(prev => [...prev, { 
+        role: 'model', 
+        text: `Here is the AI result for your /${action.toLowerCase()} request:\n\n${resultText.replace(/<[^>]*>/g, '')}` 
+      }]);
+
+      if (selectionText) {
+        handleReplaceSelectionWithText(resultText);
+      } else {
+        editorRef.current.innerHTML = resultText;
+        handleInput();
+      }
+    } catch (err: any) {
+      setAiChatHistory(prev => [...prev, { role: 'model', text: `Error: ${err.message}` }]);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   const handleEditorClick = (e: React.MouseEvent) => {
     let el = e.target as HTMLElement | null;
@@ -259,6 +430,25 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const headingElements = editorRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const headingsData = Array.from(headingElements).map((el, idx) => {
+      let id = el.getAttribute('id');
+      if (!id) {
+        id = `heading-det-${idx}`;
+        el.setAttribute('id', id);
+      }
+      return {
+        id,
+        text: el.textContent || el.innerText || 'Untitled Heading',
+        level: parseInt(el.tagName.substring(1), 10),
+        index: idx
+      };
+    });
+    setDetectedHeadings(headingsData);
+  }, [content]);
+
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const scrollY = e.currentTarget.scrollTop;
     // Calculate current page based on scroll position + half of the visible window
@@ -328,8 +518,73 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
       e.preventDefault();
       document.execCommand('insertText', false, suggestion.text);
       setSuggestion(null);
-    } else if (e.key === 'Escape' && suggestion) {
-      setSuggestion(null);
+      return;
+    } else if (e.key === 'Escape') {
+      if (suggestion) setSuggestion(null);
+      if (showSlashPopover) setShowSlashPopover(false);
+      return;
+    }
+
+    if (e.key === '/') {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (editorRef.current) {
+          const editorRect = editorRef.current.getBoundingClientRect();
+          setSlashPopoverPos({
+            top: rect.bottom - editorRect.top + editorRef.current.scrollTop + 10,
+            left: rect.left - editorRect.left,
+          });
+          setShowSlashPopover(true);
+        }
+      }
+    } else if (e.key === ' ' || e.key === 'Enter') {
+      setShowSlashPopover(false);
+    }
+
+    if (e.key === ' ') {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const container = range.startContainer;
+        
+        if (editorRef.current && editorRef.current.contains(container)) {
+          const textVal = container.textContent || '';
+          const offset = range.startOffset;
+          const leftText = textVal.slice(0, offset);
+
+          if (leftText === '#') {
+            e.preventDefault();
+            document.execCommand('delete', false);
+            document.execCommand('formatBlock', false, '<h1>');
+          }
+          else if (leftText === '##') {
+            e.preventDefault();
+            document.execCommand('delete', false);
+            document.execCommand('delete', false);
+            document.execCommand('formatBlock', false, '<h2>');
+          }
+          else if (leftText === '###') {
+            e.preventDefault();
+            document.execCommand('delete', false);
+            document.execCommand('delete', false);
+            document.execCommand('delete', false);
+            document.execCommand('formatBlock', false, '<h3>');
+          }
+          else if (leftText === '*' || leftText === '-') {
+            e.preventDefault();
+            document.execCommand('delete', false);
+            document.execCommand('insertUnorderedList', false);
+          }
+          else if (leftText === '1.') {
+            e.preventDefault();
+            document.execCommand('delete', false);
+            document.execCommand('delete', false);
+            document.execCommand('insertOrderedList', false);
+          }
+        }
+      }
     }
   };
 
@@ -1275,13 +1530,38 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              <button 
+                onClick={() => setShowLeftPane(!showLeftPane)}
+                className={`p-1 px-2 rounded text-xs font-semibold flex items-center gap-1.5 transition-all outline-none border cursor-pointer ${
+                  showLeftPane 
+                    ? 'bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-700' 
+                    : 'bg-transparent text-zinc-400 border-transparent hover:bg-zinc-800 hover:text-white'
+                }`}
+                title="Toggle Outline navigation"
+              >
+                <BookOpen size={13} />
+                <span className="hidden sm:inline">Outline</span>
+              </button>
+              <button 
+                onClick={() => setShowRightPane(!showRightPane)}
+                className={`p-1 px-2 rounded text-xs font-semibold flex items-center gap-1.5 transition-all outline-none border cursor-pointer ${
+                  showRightPane 
+                    ? 'bg-purple-900/60 text-purple-100 border-purple-800 hover:bg-purple-800' 
+                    : 'bg-transparent text-zinc-400 border-transparent hover:bg-zinc-800 hover:text-white'
+                }`}
+                title="Toggle AI Sidekick"
+              >
+                <Sparkles size={13} className="text-purple-400 animate-pulse" />
+                <span className="hidden sm:inline">AI Assist</span>
+              </button>
+              <div className="w-px h-4 bg-zinc-700 mx-1 block hidden sm:block" />
               <span className="hidden md:inline-block text-[10px] text-zinc-400">
                 {isSaved ? '● Saved' : '○ Unsaved'}
               </span>
               <button
                 onClick={handleSave}
                 disabled={isSaved}
-                className={`p-1 px-2.5 sm:py-1 text-xs rounded font-medium flex items-center gap-1 ${
+                className={`p-1 px-2.5 sm:py-1 text-xs rounded font-medium flex items-center gap-1 cursor-pointer ${
                   isSaved 
                     ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
                     : 'bg-blue-600 hover:bg-blue-700 text-white shadow'
@@ -2287,162 +2567,344 @@ export function DocumentEditor({ onBack }: DocumentEditorProps) {
         </div>
       )}
 
-      {/* Editor Area */}
-      <div 
-        className="flex-1 overflow-y-auto bg-gray-200/50 p-4 sm:p-8 flex justify-center w-full relative"
-        onScroll={handleScroll}
-      >
-        <div className={`relative shadow-md bg-white border border-gray-200 transition-all duration-300 mx-auto ${viewMode === 'web' || viewMode === 'read' ? 'w-full max-w-5xl' : ''}`} style={{ maxWidth: viewMode === 'print' ? getPaperStyles().width : undefined }}>
-          
-          {/* Watermark Overlay */}
-          {watermark && (
-            <div className="absolute inset-0 pointer-events-none flex flex-col items-center overflow-hidden z-0 opacity-10">
-               {Array.from({ length: totalPages }).map((_, i) => (
-                 <div key={`watermark-${i}`} className="flex-none flex items-center justify-center w-full" style={{ height: getPaperStyles().height }}>
-                    <span className="text-[8rem] sm:text-[12rem] font-bold text-gray-800 uppercase tracking-widest -rotate-45 whitespace-nowrap opacity-50">
-                      {watermark}
-                    </span>
-                 </div>
-               ))}
+      {/* 3-Panel Split Area (Milestone 1 — Editor Shell) */}
+      <div className="flex-1 flex overflow-hidden w-full relative bg-gray-100">
+        
+        {/* Left Panel: Document Navigation (Outline) */}
+        {showLeftPane && (
+          <div className="w-64 border-r border-gray-200 bg-zinc-50 flex flex-col shrink-0 overflow-y-auto hidden md:flex select-none">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-zinc-100/50">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                <BookOpen size={14} className="text-zinc-400" />
+                Document outline
+              </span>
+              <span className="text-[10px] bg-zinc-200 text-zinc-600 px-1.5 py-0.5 rounded font-mono font-bold">
+                {detectedHeadings.length}
+              </span>
             </div>
-          )}
+            <div className="p-2 space-y-1">
+              {detectedHeadings.length === 0 ? (
+                <div className="p-4 text-center text-xs text-zinc-400 italic">
+                  No headings found yet. Use # headings or type content to see outline.
+                </div>
+              ) : (
+                detectedHeadings.map((hd) => (
+                  <button
+                    key={hd.id}
+                    onClick={() => scrollToHeading(hd.id)}
+                    className="w-full text-left p-2 hover:bg-zinc-200/60 rounded text-xs font-semibold text-zinc-600 transition-colors truncate block cursor-pointer"
+                    style={{ paddingLeft: `${Math.max(8, hd.level * 10)}px` }}
+                  >
+                    <span className="text-zinc-400 mr-1 select-none font-bold text-[10px]">H{hd.level}</span>
+                    {hd.text}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
-          {/* Overlay Page Numbers & Visual Pagination lines */}
-          {viewMode === 'print' && showPageNumbers && Array.from({ length: totalPages }).map((_, i) => (
-            <React.Fragment key={`page-${i}`}>
-              <div 
-                className="absolute -left-12 sm:-left-16 w-12 flex justify-end pointer-events-none select-none print:hidden opacity-80 z-20"
-                style={{ top: `${(i + 1) * getPaperStyles().height - 8}px` }}
-              >
-                <span className="text-gray-400 text-[10px] font-bold tracking-wider">PG {i + 1}</span>
+        {/* Center Panel: Editor Canvas scroll area */}
+        <div 
+          className="flex-1 overflow-y-auto bg-zinc-200/40 p-4 sm:p-8 flex justify-center relative border-r border-zinc-200/60"
+          onScroll={handleScroll}
+        >
+          <div className={`relative shadow-md bg-white border border-gray-200 transition-all duration-300 mx-auto ${viewMode === 'web' || viewMode === 'read' ? 'w-full max-w-5xl' : ''}`} style={{ maxWidth: viewMode === 'print' ? getPaperStyles().width : undefined }}>
+            
+            {/* Watermark Overlay */}
+            {watermark && (
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center overflow-hidden z-0 opacity-10">
+                 {Array.from({ length: totalPages }).map((_, i) => (
+                   <div key={`watermark-${i}`} className="flex-none flex items-center justify-center w-full" style={{ height: getPaperStyles().height }}>
+                      <span className="text-[8rem] sm:text-[12rem] font-bold text-gray-800 uppercase tracking-widest -rotate-45 whitespace-nowrap opacity-50">
+                        {watermark}
+                      </span>
+                   </div>
+                 ))}
               </div>
+            )}
+
+            {/* Overlay Page Numbers & Visual Pagination lines */}
+            {viewMode === 'print' && showPageNumbers && Array.from({ length: totalPages }).map((_, i) => (
+              <React.Fragment key={`page-${i}`}>
+                <div 
+                  className="absolute -left-12 sm:-left-16 w-12 flex justify-end pointer-events-none select-none print:hidden opacity-80 z-20"
+                  style={{ top: `${(i + 1) * getPaperStyles().height - 8}px` }}
+                >
+                  <span className="text-gray-400 text-[10px] font-bold tracking-wider">PG {i + 1}</span>
+                </div>
+                <div 
+                  className="absolute left-0 w-full border-b border-dashed border-gray-300 pointer-events-none opacity-60 z-10 print:hidden"
+                  style={{ top: `${(i + 1) * getPaperStyles().height}px` }}
+                />
+              </React.Fragment>
+            ))}
+
+            <div 
+              ref={editorRef}
+              className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 [&_table.table-striped_tr:nth-child(even)_td]:!bg-gray-100/50 [&_table.table-bold-header_tr:first-child_td]:!bg-gray-100 [&_table.table-bold-header_tr:first-child_td]:!font-bold [&_table.table-condensed_td]:!p-1 [&_table.show-borders]:!border [&_table.show-borders]:!border-gray-400 [&_table.show-borders_td]:!border [&_table.show-borders_td]:!border-gray-400 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
+              style={{ 
+                 minHeight: getPaperStyles().height,
+                 backgroundColor: pageColor === '#ffffff' ? 'transparent' : pageColor
+              }}
+              contentEditable
+              spellCheck={spellCheckEnabled}
+              onInput={handleInput}
+              onMouseUp={updateSelectionState}
+              onClick={handleEditorClick}
+              onKeyUp={updateSelectionState}
+              onKeyDown={handleKeyDownLocal}
+              data-placeholder="Start typing your document here..."
+            />
+            
+            {/* Floating Menu for text selection */}
+            {floatingMenu && floatingMenu.show && (
               <div 
-                className="absolute left-0 w-full border-b border-dashed border-gray-300 pointer-events-none opacity-60 z-10 print:hidden"
-                style={{ top: `${(i + 1) * getPaperStyles().height}px` }}
-              />
-            </React.Fragment>
-          ))}
+                className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg flex items-center px-1 py-1 gap-0.5 animate-in fade-in zoom-in-95 duration-150"
+                style={{
+                   top: `${Math.max(0, floatingMenu.top)}px`,
+                   left: `${Math.max(0, floatingMenu.left)}px`,
+                   transform: 'translateX(-50%)'
+                }}
+                onMouseDown={(e) => e.preventDefault()} // Keep focus on editor
+              >
+                 <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 font-bold cursor-pointer" onClick={() => exec('bold')}>B</button>
+                 <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 italic cursor-pointer" onClick={() => exec('italic')}>I</button>
+                 <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 underline cursor-pointer" onClick={() => exec('underline')}>U</button>
+                 <div className="w-px h-4 bg-gray-300 mx-1 block" />
+                 <button className="p-1 hover:bg-gray-100 rounded text-gray-700 cursor-pointer" onClick={() => exec('justifyLeft')}><AlignLeft size={14} /></button>
+                 <button className="p-1 hover:bg-gray-100 rounded text-gray-700 cursor-pointer" onClick={() => exec('justifyCenter')}><AlignCenter size={14} /></button>
+                 <button className="p-1 hover:bg-gray-100 rounded text-gray-700 cursor-pointer" onClick={() => exec('justifyRight')}><AlignRight size={14} /></button>
+                 <button className="p-1 hover:bg-gray-100 rounded text-gray-700 cursor-pointer" onClick={() => exec('justifyFull')}><AlignJustify size={14} /></button>
+                 <div className="w-px h-4 bg-gray-300 mx-1 block" />
+                 <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 line-through cursor-pointer" onClick={() => exec('strikeThrough')}>S</button>
+                 <select 
+                   className="text-xs bg-transparent outline-none cursor-pointer border-none font-medium hover:bg-gray-100 p-0.5 rounded"
+                   onChange={(e) => exec('fontSize', e.target.value)}
+                   defaultValue="3"
+                 >
+                    <option value="1">10pt</option>
+                    <option value="2">11pt</option>
+                    <option value="3">12pt</option>
+                    <option value="4">14pt</option>
+                    <option value="5">18pt</option>
+                    <option value="6">24pt</option>
+                 </select>
+                 <div className="w-px h-4 bg-gray-300 mx-1 block" />
+                 <input 
+                    type="color" 
+                    className="w-5 h-5 rounded cursor-pointer border-none bg-transparent block"
+                    onChange={(e) => exec('foreColor', e.target.value)}
+                    title="Text Color"
+                 />
+                 <input 
+                    type="color" 
+                    className="w-5 h-5 rounded cursor-pointer border-none bg-transparent block"
+                    onChange={(e) => exec('hiliteColor', e.target.value)}
+                    title="Highlight Color"
+                 />
+              </div>
+            )}
 
-          <div 
-            ref={editorRef}
-            className={`w-full relative z-10 p-12 sm:p-16 md:p-24 outline-none ${fontFamily} [&_h1]:text-4xl [&_h1]:sm:text-5xl [&_h1]:font-extrabold [&_h1]:mb-6 [&_h1]:mt-8 [&_h2]:text-3xl [&_h2]:sm:text-4xl [&_h2]:font-bold [&_h2]:mb-4 [&_h2]:mt-6 [&_h3]:text-2xl [&_h3]:sm:text-3xl [&_h3]:font-semibold [&_h3]:mb-3 [&_h3]:mt-5 [&_h4]:text-xl [&_h4]:font-semibold [&_h4]:mb-2 [&_h4]:mt-4 [&_h5]:text-lg [&_h5]:font-medium [&_h5]:mb-2 [&_h5]:mt-3 [&_h6]:text-base [&_h6]:font-medium [&_h6]:text-gray-600 [&_h6]:mb-1 [&_h6]:mt-2 [&_ul]:list-disc [&_ul]:ml-8 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:ml-8 [&_ol]:mb-4 [&_table.table-striped_tr:nth-child(even)_td]:!bg-gray-100/50 [&_table.table-bold-header_tr:first-child_td]:!bg-gray-100 [&_table.table-bold-header_tr:first-child_td]:!font-bold [&_table.table-condensed_td]:!p-1 [&_table.show-borders]:!border [&_table.show-borders]:!border-gray-400 [&_table.show-borders_td]:!border [&_table.show-borders_td]:!border-gray-400 ${pSpacingClasses[paragraphSpacing]} ${lhClasses[lineHeight]} focus:shadow-lg focus:ring-1 focus:ring-blue-100 transition-shadow`}
-            style={{ 
-               minHeight: getPaperStyles().height,
-               backgroundColor: pageColor === '#ffffff' ? 'transparent' : pageColor
-            }}
-            contentEditable
-            spellCheck={spellCheckEnabled}
-            onInput={handleInput}
-            onMouseUp={updateSelectionState}
-            onClick={handleEditorClick}
-            onKeyUp={updateSelectionState}
-            onKeyDown={handleKeyDownLocal}
-            data-placeholder="Start typing your document here..."
-          />
-          
-          {/* Floating Menu for text selection */}
-          {floatingMenu && floatingMenu.show && (
-            <div 
-              className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg flex items-center px-1 py-1 gap-0.5 animate-in fade-in zoom-in-95 duration-150"
-              style={{
-                 top: `${Math.max(0, floatingMenu.top)}px`,
-                 left: `${Math.max(0, floatingMenu.left)}px`,
-                 transform: 'translateX(-50%)'
-              }}
-              onMouseDown={(e) => e.preventDefault()} // Keep focus on editor
-            >
-               <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 font-bold" onClick={() => exec('bold')}>B</button>
-               <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 italic" onClick={() => exec('italic')}>I</button>
-               <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 underline" onClick={() => exec('underline')}>U</button>
-               <div className="w-px h-4 bg-gray-300 mx-1 block" />
-               <button className="p-1 hover:bg-gray-100 rounded text-gray-700" onClick={() => exec('justifyLeft')}><AlignLeft size={14} /></button>
-               <button className="p-1 hover:bg-gray-100 rounded text-gray-700" onClick={() => exec('justifyCenter')}><AlignCenter size={14} /></button>
-               <button className="p-1 hover:bg-gray-100 rounded text-gray-700" onClick={() => exec('justifyRight')}><AlignRight size={14} /></button>
-               <button className="p-1 hover:bg-gray-100 rounded text-gray-700" onClick={() => exec('justifyFull')}><AlignJustify size={14} /></button>
-               <div className="w-px h-4 bg-gray-300 mx-1 block" />
-               <button className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 line-through" onClick={() => exec('strikeThrough')}>S</button>
-               <select 
-                 className="text-xs bg-transparent outline-none cursor-pointer border-none font-medium hover:bg-gray-100 p-0.5 rounded"
-                 onChange={(e) => exec('fontSize', e.target.value)}
-                 defaultValue="3"
-               >
-                  <option value="1">10pt</option>
-                  <option value="2">11pt</option>
-                  <option value="3">12pt</option>
-                  <option value="4">14pt</option>
-                  <option value="5">18pt</option>
-                  <option value="6">24pt</option>
-               </select>
-               <div className="w-px h-4 bg-gray-300 mx-1 block" />
-               <input 
-                  type="color" 
-                  className="w-5 h-5 rounded cursor-pointer border-none bg-transparent block"
-                  onChange={(e) => exec('foreColor', e.target.value)}
-                  title="Text Color"
-               />
-               <input 
-                  type="color" 
-                  className="w-5 h-5 rounded cursor-pointer border-none bg-transparent block"
-                  onChange={(e) => exec('hiliteColor', e.target.value)}
-                  title="Highlight Color"
-               />
-            </div>
-          )}
+            {/* Material Formatting Menu */}
+            {activeMaterial && (
+              <div 
+                className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg flex items-center px-1 py-1 gap-0.5 animate-in fade-in zoom-in-95 duration-150"
+                style={{
+                   top: `${Math.max(0, activeMaterial.offsetTop - 50)}px`,
+                   left: `${Math.max(0, activeMaterial.offsetLeft + activeMaterial.offsetWidth / 2)}px`,
+                   transform: 'translateX(-50%)'
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                 <button 
+                   className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                   title="Float Left (Wrap Text)" 
+                   onClick={() => { activeMaterial.style.float = 'left'; activeMaterial.style.margin = '0 15px 15px 0'; }}
+                 >
+                   <AlignLeft size={14} /> Wrap L
+                 </button>
+                 <button 
+                   className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                   title="Float Right (Wrap Text)" 
+                   onClick={() => { activeMaterial.style.float = 'right'; activeMaterial.style.margin = '0 0 15px 15px'; }}
+                 >
+                   <AlignRight size={14} /> Wrap R
+                 </button>
+                 <button 
+                   className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                   title="In Line (No Wrap)" 
+                   onClick={() => { activeMaterial.style.float = 'none'; activeMaterial.style.margin = '0'; }}
+                 >
+                   <AlignCenter size={14} /> Inline
+                 </button>
+                 <div className="w-px h-4 bg-gray-300 mx-1 block" />
+                 <button 
+                   className="p-1 px-1.5 hover:bg-red-50 text-red-600 rounded text-xs font-semibold cursor-pointer"
+                   title="Delete Frame" 
+                   onClick={() => { activeMaterial.remove(); setActiveMaterial(null); handleInput(); }}
+                 >
+                   Delete
+                 </button>
+              </div>
+            )}
 
-          {/* Material Formatting Menu */}
-          {activeMaterial && (
-            <div 
-              className="absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg flex items-center px-1 py-1 gap-0.5 animate-in fade-in zoom-in-95 duration-150"
-              style={{
-                 top: `${Math.max(0, activeMaterial.offsetTop - 50)}px`,
-                 left: `${Math.max(0, activeMaterial.offsetLeft + activeMaterial.offsetWidth / 2)}px`,
-                 transform: 'translateX(-50%)'
-              }}
-              onMouseDown={(e) => e.preventDefault()}
-            >
-               <button 
-                 className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1"
-                 title="Float Left (Wrap Text)" 
-                 onClick={() => { activeMaterial.style.float = 'left'; activeMaterial.style.margin = '0 15px 15px 0'; }}
-               >
-                 <AlignLeft size={14} /> Wrap L
-               </button>
-               <button 
-                 className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1"
-                 title="Float Right (Wrap Text)" 
-                 onClick={() => { activeMaterial.style.float = 'right'; activeMaterial.style.margin = '0 0 15px 15px'; }}
-               >
-                 <AlignRight size={14} /> Wrap R
-               </button>
-               <button 
-                 className="p-1 px-1.5 hover:bg-gray-100 rounded text-gray-700 text-xs font-semibold flex items-center gap-1"
-                 title="In Line (No Wrap)" 
-                 onClick={() => { activeMaterial.style.float = 'none'; activeMaterial.style.margin = '0'; }}
-               >
-                 <AlignCenter size={14} /> Inline
-               </button>
-               <div className="w-px h-4 bg-gray-300 mx-1 block" />
-               <button 
-                 className="p-1 px-1.5 hover:bg-red-50 text-red-600 rounded text-xs font-semibold"
-                 title="Delete Frame" 
-                 onClick={() => { activeMaterial.remove(); setActiveMaterial(null); handleInput(); }}
-               >
-                 Delete
-               </button>
-            </div>
-          )}
+            {/* Autocomplete Suggestion */}
+            {suggestion && (
+              <div 
+                className="absolute z-50 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none transition-opacity flex items-center gap-1"
+                style={{ top: Math.max(0, suggestion.top + 5) + 'px', left: Math.max(0, suggestion.left) + 'px' }}
+              >
+                <span>{suggestion.fullWord}</span>
+                <span className="text-gray-400 bg-gray-700 px-1 rounded text-[10px]">Tab</span>
+              </div>
+            )}
 
-          {/* Autocomplete Suggestion */}
-          {suggestion && (
-            <div 
-              className="absolute z-50 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none transition-opacity flex items-center gap-1"
-              style={{ top: Math.max(0, suggestion.top + 5) + 'px', left: Math.max(0, suggestion.left) + 'px' }}
-            >
-              <span>{suggestion.fullWord}</span>
-              <span className="text-gray-400 bg-gray-700 px-1 rounded text-[10px]">Tab</span>
-            </div>
-          )}
+            {/* Inline AI Slash Popover menu (Milestone 3 — AI Commands) */}
+            {showSlashPopover && (
+              <div 
+                className="absolute z-50 bg-white border border-zinc-200 rounded-xl shadow-2xl w-60 py-1.5 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+                style={{ top: `${slashPopoverPos.top}px`, left: `${slashPopoverPos.left}px` }}
+              >
+                <div className="px-3 py-1 font-semibold text-[10px] text-zinc-400 uppercase tracking-wider bg-zinc-50 border-b border-zinc-100 mb-1">
+                  AI Slash Commands
+                </div>
+                {SLASH_COMMANDS.map((item) => (
+                  <button
+                    key={item.cmd}
+                    onClick={() => handleSlashCommandClick(item.action)}
+                    className="w-full flex items-start gap-2.5 p-2 px-3 hover:bg-purple-50 text-left transition-colors cursor-pointer"
+                  >
+                    <Sparkles size={14} className="text-purple-500 mt-1 shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold text-zinc-700">{item.cmd}</div>
+                      <div className="text-[10px] text-zinc-500">{item.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Right Panel: AI Assistant Side Panel (Milestone 1 — Editor Shell) */}
+        {showRightPane && (
+          <div className="w-80 border-l border-zinc-200 bg-zinc-50 flex flex-col shrink-0 overflow-hidden hidden lg:flex select-none">
+            <div className="p-4 border-b border-zinc-200 flex items-center justify-between bg-zinc-100/50">
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-600 flex items-center gap-1.5">
+                <Sparkles size={14} className="text-purple-500 animate-pulse" />
+                AI Assistant Sidekick
+              </span>
+              <button 
+                onClick={() => setShowRightPane(false)}
+                className="text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            
+            {/* Conversation list */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {aiChatHistory.map((item, idx) => (
+                <div 
+                  key={`msg-${idx}`}
+                  className={`flex flex-col max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed shadow-sm ${
+                    item.role === 'user' 
+                      ? 'bg-purple-600 text-white ml-auto rounded-tr-none' 
+                      : 'bg-white border border-zinc-200 text-zinc-700 mr-auto rounded-tl-none'
+                  }`}
+                >
+                  <span className="font-semibold text-[9px] uppercase tracking-wider opacity-60 mb-1 block">
+                    {item.role === 'user' ? 'You' : 'AI Assistant'}
+                  </span>
+                  <div className="whitespace-pre-wrap font-medium">{item.text}</div>
+                  
+                  {/* Insertion options for AI outputs */}
+                  {item.role === 'model' && idx > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => handleInsertTextAtCursor(item.text)}
+                        className="text-[10px] font-bold text-purple-600 hover:text-white hover:bg-purple-600 border border-purple-200 hover:border-purple-600 rounded px-1.5 py-0.5 transition-colors cursor-pointer bg-white"
+                      >
+                        Insert at Cursor
+                      </button>
+                      <button
+                        onClick={() => handleReplaceSelectionWithText(item.text)}
+                        className="text-[10px] font-bold text-zinc-700 hover:text-white hover:bg-zinc-700 border border-zinc-200 hover:border-zinc-700 rounded px-1.5 py-0.5 transition-colors cursor-pointer bg-white"
+                      >
+                        Replace Selection
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {isAiLoading && (
+                <div className="bg-white border border-zinc-200 rounded-2xl rounded-tl-none p-3 text-xs leading-relaxed text-zinc-500 mr-auto flex items-center gap-2 max-w-[85%] shadow-sm">
+                  <div className="flex space-x-1">
+                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span className="font-medium font-semibold italic">Sidekick is drafting...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Quick presets panel */}
+            <div className="p-3 border-t border-zinc-100 bg-zinc-100/30">
+              <div className="text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">presets</div>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                <button 
+                  onClick={() => handleSendPresetMessage('Summarize this document')}
+                  className="p-1.5 px-2 text-left bg-white border border-zinc-200 rounded hover:border-purple-400 hover:bg-purple-50 flex items-center gap-1.5 cursor-pointer truncate font-semibold text-zinc-600 hover:text-purple-700 transition-colors bg-white hover:shadow-sm"
+                >
+                  <Sparkles size={10} className="text-purple-400 shrink-0" />
+                  Summarize
+                </button>
+                <button 
+                  onClick={() => handleSendPresetMessage('Write a business proposal section based on standard templates')}
+                  className="p-1.5 px-2 text-left bg-white border border-zinc-200 rounded hover:border-purple-400 hover:bg-purple-50 flex items-center gap-1.5 cursor-pointer truncate font-semibold text-zinc-600 hover:text-purple-700 transition-colors bg-white hover:shadow-sm"
+                >
+                  <Sparkles size={10} className="text-purple-400 shrink-0" />
+                  Draft Proposal
+                </button>
+                <button 
+                  onClick={() => handleSendPresetMessage('Rewrite the selection or current text to be formal')}
+                  className="p-1.5 px-2 text-left bg-white border border-zinc-200 rounded hover:border-purple-400 hover:bg-purple-50 flex items-center gap-1.5 cursor-pointer truncate font-semibold text-zinc-600 hover:text-purple-700 transition-colors bg-white hover:shadow-sm"
+                >
+                  <Sparkles size={10} className="text-purple-400 shrink-0" />
+                  Make Formal
+                </button>
+                <button 
+                  onClick={() => handleSendPresetMessage('Expand the current content to add detailed data and context')}
+                  className="p-1.5 px-2 text-left bg-white border border-zinc-200 rounded hover:border-purple-400 hover:bg-purple-50 flex items-center gap-1.5 cursor-pointer truncate font-semibold text-zinc-600 hover:text-purple-700 transition-colors bg-white hover:shadow-sm"
+                >
+                  <Sparkles size={10} className="text-purple-400 shrink-0" />
+                  Expand
+                </button>
+              </div>
+            </div>
+
+            {/* Form footer of AI Assistant */}
+            <form onSubmit={handleSendAiMessage} className="p-3 border-t border-zinc-200 bg-white flex gap-1.5 items-center">
+              <input
+                type="text"
+                value={aiChatQuery}
+                onChange={(e) => setAiChatQuery(e.target.value)}
+                placeholder="Ask the co-writer, e.g. draft/edit..."
+                className="flex-1 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                disabled={isAiLoading}
+              />
+              <button
+                type="submit"
+                disabled={isAiLoading || !aiChatQuery.trim()}
+                className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg p-1.5 transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 cursor-pointer"
+              >
+                <Send size={14} />
+              </button>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* Footer */}

@@ -59,6 +59,58 @@ app.post('/api/process-document', async (req, res) => {
   }
 });
 
+app.post('/api/ai-chat', async (req, res) => {
+  try {
+    const { message, contextContent, conversationHistory } = req.body;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is missing.' });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    
+    let systemInstruction = `You are a supportive, high-intelligence AI co-writer and assistant integrated inside a professional Word Editor.
+The user is currently writing/editing a document. Here is the full HTML content of their current document as context:
+---
+${contextContent || "[Empty Document]"}
+---
+
+Your role is to help them expand, rewrite, proofread, format, or answer any questions about their document.
+You have the power to help them edit. If they ask you to perform a writing task or edit, write clear, polished text.
+Keep your conversational responses helpful, clean, informative, and formatted beautifully in markdown.`;
+
+    const contents = [];
+    if (conversationHistory && Array.isArray(conversationHistory)) {
+      for (const msg of conversationHistory) {
+        contents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+        });
+      }
+    }
+    contents.push({
+      role: 'user',
+      parts: [{ text: message }]
+    });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: contents,
+      config: {
+        systemInstruction: systemInstruction,
+        temperature: 0.7
+      }
+    });
+
+    const reply = response.text || '';
+    res.json({ result: reply });
+
+  } catch (error) {
+    console.error('Error in AI Chat:', error);
+    res.status(500).json({ error: error.message || 'Error communicating with AI.' });
+  }
+});
+
 // For production, serve the Vite build
 app.use(express.static(path.join(__dirname, 'apps/web/dist')));
 
