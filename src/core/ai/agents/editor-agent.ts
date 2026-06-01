@@ -7,52 +7,85 @@ export class EditorAgent implements AIAgent {
   // reacts to document-level and block-level edits
   onEvent = [
     'block.update',
-    'block.update',
+    'block.insert',
     'document.updated'
   ];
 
   constructor(private eventBus: EventBus) {}
 
+  private detectLanguage(text: string): string {
+    // lightweight heuristic (placeholder for real NLP/LLM detection)
+    const latin = /[a-zA-Z]/.test(text);
+    const swahiliMarkers = /(na|ya|wa|ni|kwa|katika)/i.test(text);
+
+    if (swahiliMarkers && latin) return 'mixed';
+    if (swahiliMarkers) return 'swahili';
+    if (latin) return 'english';
+
+    return 'unknown';
+  }
+
   async handle(context: AgentContext, payload?: any) {
     const { document, blockId } = context;
 
-    // Find target block if exists
     const block = blockId
       ? document.blocks.find(b => b.id === blockId)
       : undefined;
 
-    // BASIC EDITING INTELLIGENCE LAYER (placeholder for LLM later)
-
     if (block && block.content) {
       const text = block.content;
+      const language = this.detectLanguage(text);
 
-      // simple grammar heuristic checks
-      const hasTooShortSentence = text.length > 0 && text.length < 15;
+      const words = text.trim().split(/\s+/);
+      const wordCount = words.length;
+
+      const hasWeakStructure = wordCount > 0 && wordCount < 5;
       const missingCapital = /^[a-z]/.test(text);
-      const missingPeriod = !/[.!?]$/.test(text);
+      const missingPunctuation = !/[.!?]$/.test(text);
+      const repeatedWords = /(\b\w+\b)(?:\s+\1\b)+/i.test(text);
 
-      if (hasTooShortSentence) {
+      // structural intelligence
+      if (hasWeakStructure) {
         this.eventBus.emit('ai.suggestion', {
-          type: 'editor-expand',
+          type: 'editor-semantic-expand',
           blockId,
-          suggestion: 'Expand this sentence for clarity and detail',
+          language,
+          suggestion: 'Strengthen this phrase with more context and meaning',
         });
       }
 
-      if (missingCapital || missingPeriod) {
+      // grammar + style
+      if (missingCapital || missingPunctuation) {
         this.eventBus.emit('ai.suggestion', {
           type: 'editor-grammar',
           blockId,
-          suggestion: 'Fix grammar: capitalization or punctuation missing',
+          language,
+          suggestion: 'Fix sentence structure: capitalization or punctuation issues',
         });
       }
 
-      if (text.split(' ').length > 40) {
+      // repetition detection
+      if (repeatedWords) {
         this.eventBus.emit('ai.suggestion', {
-          type: 'editor-split',
+          type: 'editor-redundancy',
           blockId,
-          suggestion: 'Consider splitting this long paragraph for readability',
+          language,
+          suggestion: 'Remove repeated words to improve clarity',
         });
+      }
+
+      // word order / fluency heuristic (basic placeholder)
+      if (language === 'english' && wordCount > 6) {
+        const likelyAwkwardOrder = /\b(very|really|just)\b.*\b(very|really|just)\b/i.test(text);
+
+        if (likelyAwkwardOrder) {
+          this.eventBus.emit('ai.suggestion', {
+            type: 'editor-word-order',
+            blockId,
+            language,
+            suggestion: 'Reorder words for smoother natural English flow',
+          });
+        }
       }
     }
 
