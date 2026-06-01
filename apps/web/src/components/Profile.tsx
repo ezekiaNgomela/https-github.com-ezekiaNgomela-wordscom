@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { ArrowLeft, LogOut, CheckCircle2, Zap, CreditCard, Smartphone, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, LogOut, CheckCircle2, Zap, CreditCard, Smartphone, User as UserIcon, Download } from 'lucide-react';
 import { logOut, db } from '../firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import html2pdf from 'html2pdf.js';
 
 interface Payment {
   id: string;
@@ -109,6 +110,45 @@ export function Profile({ user, onBack }: ProfileProps) {
     } finally {
       setIsProcessingPayment(false);
     }
+  };
+
+  const handleDownloadReceipt = (payment: Payment) => {
+    const receiptElement = document.createElement('div');
+    receiptElement.innerHTML = `
+      <div style="font-family: sans-serif; padding: 40px; color: #111;">
+        <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 24px; color: #059669;">Payment Receipt</h1>
+        <div style="margin-bottom: 32px; padding-bottom: 24px; border-bottom: 1px solid #e5e7eb;">
+          <p style="margin: 0; color: #6b7280; font-size: 14px;">Receipt ID</p>
+          <p style="margin: 4px 0 0 0; font-weight: bold;">${payment.id}</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <span style="color: #6b7280;">Date</span>
+          <span style="font-weight: bold;">${new Date(payment.date).toLocaleDateString()}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <span style="color: #6b7280;">Payment Method</span>
+          <span style="font-weight: bold; text-transform: capitalize;">${payment.method}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+          <span style="color: #6b7280;">Status</span>
+          <span style="font-weight: bold; color: #059669;">${payment.status}</span>
+        </div>
+        <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between;">
+          <span style="font-size: 18px; font-weight: bold;">Total Amount</span>
+          <span style="font-size: 24px; font-weight: bold; color: #059669;">${payment.amount.toLocaleString()} ${payment.currency}</span>
+        </div>
+      </div>
+    `;
+
+    const opt = {
+      margin:       1,
+      filename:     `receipt_${payment.id}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(receiptElement).save();
   };
 
   const daysLeft = premiumExpires ? Math.max(0, Math.ceil((premiumExpires - Date.now()) / (1000 * 60 * 60 * 24))) : 0;
@@ -260,7 +300,7 @@ export function Profile({ user, onBack }: ProfileProps) {
             ) : (
               <div className="divide-y divide-gray-100">
                 {paymentHistory.map((payment) => (
-                  <div key={payment.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 transition-colors gap-4">
+                  <div key={payment.id} className="payment-history-item">
                     <div className="flex items-start sm:items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                         <CheckCircle2 size={20} />
@@ -280,6 +320,15 @@ export function Profile({ user, onBack }: ProfileProps) {
                       <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider rounded-full border border-emerald-100">
                         {payment.status}
                       </span>
+                      <button 
+                        id={`download-receipt-btn-${payment.id}`}
+                        onClick={() => handleDownloadReceipt(payment)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-emerald-50 text-gray-700 hover:text-emerald-600 font-bold text-xs rounded-lg border border-gray-200 hover:border-emerald-200 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+                        title="Download Receipt"
+                      >
+                        <Download size={14} className="shrink-0" />
+                        <span>Download</span>
+                      </button>
                     </div>
                   </div>
                 ))}

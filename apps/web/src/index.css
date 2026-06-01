@@ -16,3 +16,26 @@
     display: none;
   }
 }
+
+.payment-history-item {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  gap: 1rem;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.payment-history-item:hover {
+  background-color: #f8fafc;
+}
+
+@media (min-width: 640px) {
+  .payment-history-item {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
