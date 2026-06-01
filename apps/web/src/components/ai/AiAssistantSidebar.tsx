@@ -1,15 +1,17 @@
 import { FormEvent, useState } from 'react';
-import { Bot, Send, Sparkles } from 'lucide-react';
+import { Bot, Send, Sparkles, Lightbulb } from 'lucide-react';
 import { AI_COMMANDS, AiCommandId } from '../../lib/ai/commands';
+import { DocumentSuggestion } from '../../lib/editor/intelligence';
 
 type AiAssistantSidebarProps = {
   onRunCommand: (command: AiCommandId) => void;
   onAsk: (message: string) => void;
   isProcessing: boolean;
   status: string;
+  suggestions: DocumentSuggestion[];
 };
 
-export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status, suggestions }: AiAssistantSidebarProps) {
   const [message, setMessage] = useState('');
 
   const submit = (event: FormEvent) => {
@@ -21,8 +23,8 @@ export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status }
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-slate-200 p-6">
+    <div className="flex h-full min-h-[560px] flex-col xl:h-screen">
+      <div className="border-b border-slate-200 p-5 sm:p-6">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-cyan-300">
             <Bot size={22} />
@@ -37,7 +39,23 @@ export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status }
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-5 sm:p-6">
+        {suggestions.length > 0 && (
+          <div className="mb-6 rounded-3xl border border-amber-200 bg-amber-50 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-amber-900">
+              <Lightbulb size={16} /> Context-aware suggestions
+            </div>
+            <div className="space-y-3">
+              {suggestions.map((suggestion) => (
+                <div key={suggestion.title} className="rounded-2xl bg-white/70 p-3">
+                  <p className="text-sm font-semibold text-slate-950">{suggestion.title}</p>
+                  <p className="mt-1 text-sm text-slate-600">{suggestion.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <p className="mb-3 text-xs font-bold uppercase tracking-[0.25em] text-slate-400">AI commands</p>
         <div className="space-y-3">
           {AI_COMMANDS.map((command) => (

@@ -19,14 +19,14 @@ const buildPrompt = (command, content, message = '') => {
     summarize: 'Summarize this document into a concise executive summary with clear takeaways.',
     expand: 'Expand this draft with useful details, examples, and smooth transitions.',
     table: 'Turn the relevant content into a clean, useful table and keep supporting context.',
-    proposal: 'Create a polished startup proposal with sections, headings, bullet points, timeline, and next steps.',
+    proposal: 'Create a polished startup proposal with sections, headings, bullet points, timeline, and next steps. Auto-detect natural headings and apply clean document formatting.',
   };
 
   if (command === 'chat') {
     return `User request: ${message}\n\nDocument HTML:\n${content}\n\nReturn only the improved document HTML.`;
   }
 
-  return `${commands[command] ?? message}\n\nDocument HTML:\n${content}\n\nReturn only semantic HTML with headings, paragraphs, lists, and tables when useful.`;
+  return `${commands[command] ?? message}\n\nDocument HTML:\n${content}\n\nReturn only semantic HTML with headings, paragraphs, lists, and tables when useful. Promote obvious section labels into h2 headings and apply professional auto formatting.`;
 };
 
 const processAiDocument = async (req, res) => {
@@ -43,7 +43,7 @@ const processAiDocument = async (req, res) => {
       model: 'gemini-2.5-flash',
       contents: buildPrompt(command, content, message),
       config: {
-        systemInstruction: 'You are WordCom, an AI-native document workspace. Transform user intent into polished, structured HTML documents. Return only document HTML; do not wrap output in markdown fences.',
+        systemInstruction: 'You are WordCom, an AI-native document workspace. Transform user intent into polished, structured HTML documents. Add document intelligence: infer headings, improve formatting, and provide context-aware structure. Return only document HTML; do not wrap output in markdown fences.',
         temperature: 0.25,
       },
     });
