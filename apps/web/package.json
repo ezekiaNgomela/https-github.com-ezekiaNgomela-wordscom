@@ -10,7 +10,9 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "lucide-react": "^0.546.0",
-    "motion": "^12.23.24"
+    "motion": "^12.23.24",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5"
   },
   "devDependencies": {
     "vite": "^6.2.3",
