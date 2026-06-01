@@ -2,6 +2,9 @@ import { FormEvent, useState } from 'react';
 import { Bot, Send, Sparkles, Lightbulb } from 'lucide-react';
 import { AI_COMMANDS, AiCommandId } from '../../lib/ai/commands';
 import { DocumentSuggestion } from '../../lib/editor/intelligence';
+import { PremiumState } from '../../lib/ai/premium';
+import { PremiumDocumentTask, PremiumMediaTask } from '../../server/actions/premiumAiActions';
+import { PremiumAiPanel } from './PremiumAiPanel';
 
 type AiAssistantSidebarProps = {
   onRunCommand: (command: AiCommandId) => void;
@@ -9,9 +12,14 @@ type AiAssistantSidebarProps = {
   isProcessing: boolean;
   status: string;
   suggestions: DocumentSuggestion[];
+  premium: PremiumState;
+  onPremiumText: (task: PremiumDocumentTask, concept?: string) => void;
+  onPremiumMedia: (task: PremiumMediaTask, file: File) => void;
+  onDictationText: (text: string) => void;
+  onReadDocument: () => void;
 };
 
-export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status, suggestions }: AiAssistantSidebarProps) {
+export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status, suggestions, premium, onPremiumText, onPremiumMedia, onDictationText, onReadDocument }: AiAssistantSidebarProps) {
   const [message, setMessage] = useState('');
 
   const submit = (event: FormEvent) => {
@@ -55,6 +63,18 @@ export function AiAssistantSidebar({ onRunCommand, onAsk, isProcessing, status, 
             </div>
           </div>
         )}
+
+
+        <div className="mb-6">
+          <PremiumAiPanel
+            premium={premium}
+            isProcessing={isProcessing}
+            onPremiumText={onPremiumText}
+            onPremiumMedia={onPremiumMedia}
+            onDictationText={onDictationText}
+            onReadDocument={onReadDocument}
+          />
+        </div>
 
         <p className="mb-3 text-xs font-bold uppercase tracking-[0.25em] text-slate-400">AI commands</p>
         <div className="space-y-3">

@@ -1,14 +1,19 @@
-import { Download, FileDown, Save, WandSparkles, Pilcrow } from 'lucide-react';
+import { Download, FileDown, LogOut, Save, User, WandSparkles, Pilcrow } from 'lucide-react';
+import { PremiumState } from '../../lib/ai/premium';
 
 type CommandBarProps = {
   onSave: () => void;
   onAutoFormat: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
+  onSignIn: () => void;
+  onSignOut: () => void;
   isProcessing: boolean;
+  isSignedIn: boolean;
+  premium: PremiumState;
 };
 
-export function CommandBar({ onSave, onAutoFormat, onExportPdf, onExportDocx, isProcessing }: CommandBarProps) {
+export function CommandBar({ onSave, onAutoFormat, onExportPdf, onExportDocx, onSignIn, onSignOut, isProcessing, isSignedIn, premium }: CommandBarProps) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
       <div>
@@ -31,6 +36,18 @@ export function CommandBar({ onSave, onAutoFormat, onExportPdf, onExportDocx, is
         <span className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-700">
           <WandSparkles size={14} /> {isProcessing ? 'AI writing...' : 'AI ready'}
         </span>
+        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${premium.isPremium ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+          {premium.isPremium ? 'Premium active' : 'Premium locked'}
+        </span>
+        {isSignedIn ? (
+          <button onClick={onSignOut} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <LogOut size={16} /> Sign out
+          </button>
+        ) : (
+          <button onClick={onSignIn} className="inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2 text-sm font-semibold text-cyan-800 hover:bg-cyan-100">
+            <User size={16} /> Sign in
+          </button>
+        )}
       </div>
     </div>
   );
