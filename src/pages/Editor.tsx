@@ -1,4 +1,5 @@
 import React from "react";
+import TipTapEditor from "../components/editor/TipTapEditor";
 
 export default function Editor() {
   return (
@@ -13,9 +14,7 @@ export default function Editor() {
       <div className="flex flex-1">
         {/* Editor Area */}
         <div className="flex-1 p-6">
-          <div className="border rounded-lg h-full p-4 text-gray-400">
-            Start writing your document...
-          </div>
+          <TipTapEditor />
         </div>
 
         {/* AI Panel */}
