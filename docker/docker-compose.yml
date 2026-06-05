@@ -1,0 +1,44 @@
+# Phase 26.2 - Production Deployment: Full Stack Orchestration
+# WordCom multi-service setup (API + Redis + WebSocket scaling ready)
+
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: wordcom-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    container_name: wordcom-redis
+    ports:
+      - "6379:6379"
+    restart: always
+    command: ["redis-server", "--appendonly", "yes"]
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: wordcom-worker
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: always
+    command: ["npm", "run", "worker"]
+
+networks:
+  default:
+    driver: bridge
