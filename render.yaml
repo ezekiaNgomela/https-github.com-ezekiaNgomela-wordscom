@@ -1,0 +1,30 @@
+# Phase 26.3 - Production Deployment: Render Free Tier Config
+# WordCom deployment on Render (Web + Worker + Redis optional)
+
+services:
+  - type: web
+    name: wordcom-web
+    env: docker
+    plan: free
+    autoDeploy: true
+    dockerfilePath: docker/Dockerfile
+    healthCheckPath: "/"
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  - type: worker
+    name: wordcom-worker
+    env: docker
+    plan: free
+    autoDeploy: true
+    dockerfilePath: docker/Dockerfile
+    startCommand: "npm run worker"
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+# Optional Redis (Render managed add-on if enabled manually)
+#  - type: redis
+#    name: wordcom-redis
+#    plan: free
