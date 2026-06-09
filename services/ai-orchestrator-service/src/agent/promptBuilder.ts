@@ -1,6 +1,6 @@
 import { toolRegistry } from "./toolRegistry";
 
-export function buildPlannerPrompt(input: string) {
+export function buildPlannerPrompt(input: string, memoryContext?: any) {
   const tools = Object.values(toolRegistry)
     .map(t => `- ${t.name}: ${t.endpoint}`)
     .join("\n");
@@ -15,6 +15,9 @@ RULES:
 
 TOOLS:
 ${tools}
+
+MEMORY CONTEXT:
+${memoryContext ? JSON.stringify(memoryContext, null, 2) : "none"}
 
 USER REQUEST:
 ${input}
