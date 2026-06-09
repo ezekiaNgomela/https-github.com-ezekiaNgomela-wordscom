@@ -1,6 +1,7 @@
 import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import { authMiddleware } from "./middleware/auth";
+import { apiRateLimit } from "./middleware/rateLimit";
 
 const app = express();
 app.use(express.json());
@@ -14,7 +15,10 @@ app.get("/health", (req, res) => {
   res.json({ status: "gateway ok" });
 });
 
-// Authenticated routes
+// rate limit (global)
+app.use(apiRateLimit);
+
+// auth middleware
 app.use(authMiddleware);
 
 // AI routes
