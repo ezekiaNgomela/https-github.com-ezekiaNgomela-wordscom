@@ -1,5 +1,6 @@
 import express from "express";
 import { createProxyMiddleware } from "http-proxy-middleware";
+import { authMiddleware } from "./middleware/auth";
 
 const app = express();
 app.use(express.json());
@@ -7,6 +8,14 @@ app.use(express.json());
 const AI_SERVICE = process.env.AI_SERVICE_URL || "http://ai-service:4000";
 const DOCUMENT_SERVICE = process.env.DOCUMENT_SERVICE_URL || "http://document-service:4000";
 const CONVERSION_SERVICE = process.env.CONVERSION_SERVICE_URL || "http://conversion-service:4000";
+
+// Health (public)
+app.get("/health", (req, res) => {
+  res.json({ status: "gateway ok" });
+});
+
+// Authenticated routes
+app.use(authMiddleware);
 
 // AI routes
 app.use(
@@ -25,10 +34,6 @@ app.use(
   "/convert",
   createProxyMiddleware({ target: CONVERSION_SERVICE, changeOrigin: true })
 );
-
-app.get("/health", (req, res) => {
-  res.json({ status: "gateway ok" });
-});
 
 app.listen(8080, () => {
   console.log("API Gateway running on port 8080");
