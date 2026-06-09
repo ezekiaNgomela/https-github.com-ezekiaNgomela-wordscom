@@ -2,11 +2,17 @@ import fetch from "node-fetch";
 import { buildPlannerPrompt } from "./promptBuilder";
 import { parsePlan } from "./planParser";
 import { Plan } from "./runtime";
+import { loadMemoryContext } from "../memory/memoryLoader";
 
-export async function createLLMPlan(input: string): Promise<Plan> {
-  const prompt = buildPlannerPrompt(input);
+export async function createLLMPlan(
+  input: string,
+  sessionId?: string,
+  userId?: string
+): Promise<Plan> {
+  const memoryContext = sessionId ? loadMemoryContext(sessionId, userId) : undefined;
 
-  // uses existing AI service as pseudo-LLM endpoint
+  const prompt = buildPlannerPrompt(input, memoryContext);
+
   const res = await fetch("http://ai-service:4000/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
