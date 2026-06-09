@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  ai-service:
+    build: ./services/ai-orchestrator-service
+    ports:
+      - "4001:4000"
+
+  document-service:
+    build: ./services/document-service
+    ports:
+      - "4002:4000"
+
+  conversion-service:
+    build: ./services/conversion-service
+    ports:
+      - "4003:4000"
