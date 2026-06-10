@@ -1,16 +1,15 @@
-/**
- * PHASE 8–10 BOOTSTRAP (Distributed AI Runtime Scaffold)
- * This file represents the production scaling layer over Phase 7 multi-agent system.
- */
-
 import { publish } from "../core/messageBus";
 import { route } from "../core/agentRouter";
 import { updateReputation, AgentReputation, TaskResultEvent } from "./reputation";
 import { initReputationStore, updateReputationStore } from "./reputationStore";
 import { queue } from "./queue";
+import { startControlLoop } from "./controlLoop";
 
 // Initialize persistent reputation store at startup
 initReputationStore();
+
+// Start adaptive control loop
+startControlLoop(1000);
 
 // -----------------------------
 // DISTRIBUTED QUEUE (ABSTRACT)
@@ -47,10 +46,6 @@ export async function workerNode(agentId: string = "worker-1") {
       payload: { stage: "task_routed", routing, agentId },
       timestamp: Date.now()
     });
-
-    // -----------------------------
-    // REPUTATION UPDATE PIPELINE
-    // -----------------------------
 
     const event: TaskResultEvent = {
       taskId: task.id,
@@ -110,7 +105,6 @@ export async function workerNode(agentId: string = "worker-1") {
 
     writeSharedMemory(key, updatedAgent);
 
-    // Persist to disk-backed store
     updateReputationStore(updatedAgent);
 
     publish({
