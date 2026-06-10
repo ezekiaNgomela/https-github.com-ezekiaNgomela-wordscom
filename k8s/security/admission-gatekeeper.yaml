@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security
+---
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequirevault
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequireVault
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequirevault
+
+        violation["workload must use Vault injection"] {
+          input.kind.kind == "Deployment"
+          not input.spec.template.metadata.annotations["vault.hashicorp.com/agent-inject"]
+          msg := "Missing Vault agent injection annotation"
+        }
+
+        violation["forbidden Kubernetes secrets usage"] {
+          input.kind.kind == "Deployment"
+          some i
+          input.spec.template.spec.containers[i].envFrom[_].secretRef
+        }
+
+---
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequireVault
+metadata:
+  name: require-vault-injection
+spec:
+  match:
+    kinds:
+      - apiGroups: ["apps"]
+        kinds: ["Deployment"]
+    excludedNamespaces:
+      - kube-system
+      - gatekeeper-system
+  enforcementAction: deny
