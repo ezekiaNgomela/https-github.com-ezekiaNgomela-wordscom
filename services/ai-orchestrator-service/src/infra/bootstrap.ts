@@ -26,9 +26,7 @@ export type DistributedTask = {
 // -----------------------------
 // WORKER NODE (LOGICAL NODE)
 // -----------------------------
-const AGENT_ID = "worker-1";
-
-export async function workerNode() {
+export async function workerNode(agentId: string = "worker-1") {
   while (true) {
     const task = queue.dequeue();
 
@@ -46,7 +44,7 @@ export async function workerNode() {
     publish({
       id: `worker-${Date.now()}`,
       type: "system_event",
-      payload: { stage: "task_routed", routing },
+      payload: { stage: "task_routed", routing, agentId },
       timestamp: Date.now()
     });
 
@@ -56,7 +54,7 @@ export async function workerNode() {
 
     const event: TaskResultEvent = {
       taskId: task.id,
-      agentId: AGENT_ID,
+      agentId,
       status: "success",
       metrics: {
         executionTimeMs: 120,
@@ -68,10 +66,10 @@ export async function workerNode() {
       timestamp: Date.now()
     };
 
-    const key = `reputation:${AGENT_ID}`;
+    const key = `reputation:${agentId}`;
 
     const defaultAgent: AgentReputation = {
-      agentId: AGENT_ID,
+      agentId,
       score: 500,
       dimensions: {
         reliability: 0.5,
@@ -127,6 +125,16 @@ export async function workerNode() {
     });
 
     await sleep(100);
+  }
+}
+
+// -----------------------------
+// MULTI-WORKER POOL
+// -----------------------------
+export function startWorkerPool(n: number) {
+  for (let i = 1; i <= n; i++) {
+    const id = `worker-${i}`;
+    workerNode(id);
   }
 }
 
