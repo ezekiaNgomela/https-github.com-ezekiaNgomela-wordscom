@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wordscom-root
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/ezekiaNgomela/wordscom
+    targetRevision: main
+    path: k8s
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wordscom-production
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitops-system
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitops-notes
+  namespace: gitops-system
+data:
+  system: |
+    GitOps layer enabled.
+    - ArgoCD manages full cluster state
+    - Declarative reconciliation enabled
+    - Drift correction auto-enabled
+    - Production deployments are now fully declarative
