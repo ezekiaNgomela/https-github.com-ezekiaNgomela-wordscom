@@ -22,10 +22,16 @@ function resolveAgent(type: RouteRequest["type"]): AgentType {
   }
 }
 
+function getReputationScore(agent: any): number {
+  return Number(agent?.metadata?.reputationScore ?? 0);
+}
+
 export function route(request: RouteRequest) {
   const agentType = resolveAgent(request.type);
 
-  const available = listAgents().filter(a => a.type === agentType && a.status === "idle");
+  const available = listAgents()
+    .filter(a => a.type === agentType && a.status === "idle")
+    .sort((a, b) => getReputationScore(b) - getReputationScore(a));
 
   const selected = available[0];
 
@@ -35,7 +41,8 @@ export function route(request: RouteRequest) {
     payload: {
       request,
       assignedAgent: selected?.id || null,
-      agentType
+      agentType,
+      routingStrategy: "reputation_weighted"
     },
     timestamp: Date.now()
   });
