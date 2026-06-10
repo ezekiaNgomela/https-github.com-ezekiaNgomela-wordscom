@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-kubernetes-auth
+  namespace: vault
+data:
+  enable-k8s-auth.sh: |
+    #!/bin/sh
+
+    # Enable Kubernetes auth method
+    vault auth enable kubernetes || true
+
+    # Configure Kubernetes auth backend
+    vault write auth/kubernetes/config \
+      token_reviewer_jwt="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+      kubernetes_host="https://kubernetes.default.svc" \
+      kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+    # -----------------------------
+    # Define policy for wordscom services
+    # -----------------------------
+    cat <<EOF | vault policy write wordscom-policy -
+path "secret/data/wordscom/*" {
+  capabilities = ["read"]
+}
+EOF
+
+    # -----------------------------
+    # Create role binding for workloads
+    # -----------------------------
+    vault write auth/kubernetes/role/wordscom-role \
+      bound_service_account_names="*" \
+      bound_service_account_namespaces="default,production" \
+      policies="wordscom-policy" \
+      ttl="1h"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-migration-notes
+  namespace: vault
+data:
+  migration.txt: |
+    --------------------------------------------
+    VAULT MIGRATION STRATEGY (WORDScom)
+    --------------------------------------------
+
+    1. Disable Kubernetes Secrets usage gradually
+    2. Replace envFrom secrets with Vault Agent Injector
+    3. Bind each service account to Vault role
+    4. Enforce policy-based access only
+    5. Rotate secrets via Vault leases
+
+    TARGET STATE:
+    - NO static secrets in Kubernetes
+    - ALL secrets dynamically issued by Vault
+    - ALL access logged and audited
