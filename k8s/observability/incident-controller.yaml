@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incident-controller
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: incident-controller
+  template:
+    metadata:
+      labels:
+        app: incident-controller
+    spec:
+      containers:
+        - name: incident-controller
+          image: node:20
+          command:
+            - "node"
+            - "-e"
+            - |
+              const http = require('http');
+
+              const PORT = 8080;
+
+              const server = http.createServer((req, res) => {
+                if (req.method === 'POST' && req.url === '/webhook') {
+                  let body = '';
+
+                  req.on('data', chunk => body += chunk);
+                  req.on('end', () => {
+                    try {
+                      const alert = JSON.parse(body);
+
+                      console.log('[INCIDENT] Alert received:', JSON.stringify(alert));
+
+                      // Simulated auto-remediation logic
+                      if (body.includes('critical')) {
+                        console.log('[REMEDIATION] Critical alert detected → triggering recovery actions');
+                        console.log('[ACTION] scaling services / restarting unstable components');
+                      } else {
+                        console.log('[INFO] Non-critical alert logged');
+                      }
+
+                      res.writeHead(200);
+                      res.end('ok');
+                    } catch (e) {
+                      console.error('Invalid payload', e);
+                      res.writeHead(400);
+                      res.end('invalid');
+                    }
+                  });
+
+                } else {
+                  res.writeHead(200);
+                  res.end('incident-controller alive');
+                }
+              });
+
+              server.listen(PORT, () => {
+                console.log(`Incident Controller running on port ${PORT}`);
+              });
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: incident-controller
+  namespace: monitoring
+spec:
+  selector:
+    app: incident-controller
+  ports:
+    - port: 8080
+      targetPort: 8080
