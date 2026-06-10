@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wordscom-config
+data:
+  NODE_ENV: "production"
+  WORKER_COUNT: "2"
+  PORT: "3000"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordscom-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordscom-runtime
+  template:
+    metadata:
+      labels:
+        app: wordscom-runtime
+    spec:
+      containers:
+        - name: runtime
+          image: wordscom:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "infra/runtime.v3.js"]
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: wordscom-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordscom-service
+spec:
+  selector:
+    app: wordscom-runtime
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: wordscom-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: wordscom-runtime
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
