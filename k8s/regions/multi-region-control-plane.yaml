@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: global-control-plane
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: multi-region-routing
+  namespace: global-control-plane
+data:
+  routing.yaml: |
+    # -------------------------------------------------
+    # Multi-Region Active-Active Control Plane
+    # Phase 39
+    # -------------------------------------------------
+
+    regions:
+      primary:
+        name: "africa-south-1"
+        latency_target_ms: 80
+
+      secondary:
+        name: "eu-west-1"
+        latency_target_ms: 120
+
+      tertiary:
+        name: "us-east-1"
+        latency_target_ms: 150
+
+    failover_policy:
+      mode: "active-active"
+      health_check_interval_seconds: 10
+      failure_threshold: 3
+
+    routing_strategy:
+      type: "latency_based"
+      fallback_order:
+        - africa-south-1
+        - eu-west-1
+        - us-east-1
+
+    traffic_splitting:
+      default:
+        africa-south-1: 60
+        eu-west-1: 25
+        us-east-1: 15
+
+    resilience:
+      auto_failover: true
+      region_blacklist_on_failure: true
+      recovery_probe_interval_seconds: 30
+
+    observability:
+      region_tagging: true
+      cross_region_trace_correlation: true
+
+    safety:
+      prevent_splits_brain: true
+      require_consensus_for_failover: true
