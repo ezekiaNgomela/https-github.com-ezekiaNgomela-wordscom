@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: incident-controller
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: incident-controller-role
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: incident-controller-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: incident-controller-role
+subjects:
+  - kind: ServiceAccount
+    name: incident-controller
+    namespace: monitoring
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: incident-controller
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: incident-controller
+  template:
+    metadata:
+      labels:
+        app: incident-controller
+    spec:
+      serviceAccountName: incident-controller
+      containers:
+        - name: controller
+          image: node:20
+          command:
+            - "node"
+            - "-e"
+            - |
+              const http = require('http');
+              const k8s = require('@kubernetes/client-node');
+
+              const kc = new k8s.KubeConfig();
+              kc.loadFromCluster();
+
+              const k8sApps = kc.makeApiClient(k8s.AppsV1Api);
+              const k8sCore = kc.makeApiClient(k8s.CoreV1Api);
+
+              async function scaleDown(namespace, deployment, replicas) {
+                await k8sApps.patchNamespacedDeploymentScale(
+                  deployment,
+                  namespace,
+                  { spec: { replicas } },
+                  undefined,
+                  undefined,
+                  undefined,
+                  undefined,
+                  { headers: { 'Content-Type': 'application/merge-patch+json' } }
+                );
+                console.log(`[AUTO-REMEDIATE] scaled ${deployment} to ${replicas}`);
+              }
+
+              async function restartPods(namespace, labelSelector) {
+                const pods = await k8sCore.listNamespacedPod(namespace, undefined, undefined, undefined, undefined, labelSelector);
+                for (const p of pods.body.items) {
+                  await k8sCore.deleteNamespacedPod(p.metadata.name, namespace);
+                  console.log(`[AUTO-REMEDIATE] deleted pod ${p.metadata.name}`);
+                }
+              }
+
+              const server = http.createServer(async (req, res) => {
+                if (req.method === 'POST' && req.url === '/webhook') {
+                  let body = '';
+                  req.on('data', c => body += c);
+                  req.on('end', async () => {
+                    try {
+                      const alert = JSON.parse(body);
+                      console.log('[INCIDENT]', alert);
+
+                      const msg = JSON.stringify(alert);
+
+                      // REAL remediation logic (Kubernetes API-driven)
+                      if (msg.includes('critical')) {
+                        await scaleDown('default', 'wordscom', 1);
+                        await restartPods('default', 'app=wordscom');
+                        console.log('[REMEDIATION] critical action executed');
+                      } else if (msg.includes('latency')) {
+                        await restartPods('default', 'app=wordscom');
+                        console.log('[REMEDIATION] latency mitigation triggered');
+                      }
+
+                      res.writeHead(200);
+                      res.end('ok');
+                    } catch (e) {
+                      console.error(e);
+                      res.writeHead(400);
+                      res.end('invalid');
+                    }
+                  });
+                } else {
+                  res.end('incident-controller-live');
+                }
+              });
+
+              server.listen(8080, () => console.log('real incident controller running'));
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: incident-controller
+  namespace: monitoring
+spec:
+  selector:
+    app: incident-controller
+  ports:
+    - port: 8080
+      targetPort: 8080
