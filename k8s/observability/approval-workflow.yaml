@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: incident-approval-workflow
+  namespace: monitoring
+data:
+  workflow.yaml: |
+    # -------------------------------------------------
+    # Approval Workflow Layer (Human-in-the-loop safety)
+    # -------------------------------------------------
+
+    version: v1
+
+    rules:
+      - name: high_risk_actions
+        when:
+          severity: critical
+          actions:
+            - SCALE_DOWN
+            - RESTART_PODS
+        require_approval: true
+
+      - name: medium_risk_actions
+        when:
+          severity: warning
+        require_approval: false
+        auto_approve_delay_seconds: 30
+
+    approval_channels:
+      primary: "incident-review-queue"
+      fallback: "manual-oncall"
+
+    escalation_policy:
+      no_approval_timeout_seconds: 300
+      escalate_to:
+        - sre_oncall
+        - platform_engineering
+
+    decision_engine:
+      mode: "policy_enforced"
+      require_audit_log: true
+      require_reason_for_override: true
+
+    safeguards:
+      max_pending_approvals: 10
+      max_approvals_per_hour: 20
+      block_if_alert_flood: true
+
+    integration_points:
+      alertmanager_webhook: true
+      incident_controller_hook: true
+      prometheus_signal_required: true
+
+    audit:
+      log_all_decisions: true
+      immutable_decision_trace: true
