@@ -1,0 +1,21 @@
+name: Architecture Guard
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm install
+
+      - name: Run dependency check
+        run: npx dependency-cruiser -c .dependency-cruiser.cjs .
