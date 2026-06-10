@@ -62,7 +62,7 @@ export async function workerNode() {
     });
 
     // -----------------------------
-    // PHASE 13B.1 REPUTATION WIRING
+    // PHASE 13B.1 REPUTATION WIRING (PERSISTED)
     // -----------------------------
 
     const event: TaskResultEvent = {
@@ -78,6 +78,8 @@ export async function workerNode() {
       complexity: 0.5,
       timestamp: Date.now()
     };
+
+    const key = `reputation:${AGENT_ID}`;
 
     const defaultAgent: AgentReputation = {
       agentId: AGENT_ID,
@@ -103,14 +105,31 @@ export async function workerNode() {
       confidence: 0
     };
 
-    const result = updateReputation(defaultAgent, event);
+    const existing = readSharedMemory(key) as AgentReputation | undefined;
+    const agentState = existing ?? defaultAgent;
+
+    const result = updateReputation(agentState, event);
+
+    const updatedAgent: AgentReputation = {
+      ...agentState,
+      score: result.newScore,
+      stats: {
+        ...agentState.stats,
+        totalTasks: agentState.stats.totalTasks + 1,
+        successfulTasks: agentState.stats.successfulTasks + 1,
+        lastUpdated: Date.now()
+      }
+    };
+
+    writeSharedMemory(key, updatedAgent);
 
     publish({
       id: `reputation-${Date.now()}`,
       type: "system_event",
       payload: {
         stage: "reputation_updated",
-        result
+        result,
+        agent: updatedAgent
       },
       timestamp: Date.now()
     });
