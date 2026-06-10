@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: intelligence-governance
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: intelligence-evaluation-engine
+  namespace: intelligence-governance
+data:
+  evaluation.yaml: |
+    # -------------------------------------------------
+    # Phase 42: Intelligence Evaluation & Governance
+    # -------------------------------------------------
+
+    mode: "evaluation_and_simulation_only"
+
+    evaluation_targets:
+      - predictive_engine
+      - adaptive_engine
+      - incident_controller
+      - anomaly_detector
+
+    metrics:
+      accuracy:
+        description: "prediction vs actual outcome distance"
+
+      calibration:
+        description: "confidence vs correctness alignment"
+
+      drift:
+        description: "behavior deviation over time"
+
+      stability:
+        description: "variance under identical inputs"
+
+    simulation:
+      enabled: true
+
+      scenarios:
+        - load_spike
+        - regional_failure
+        - queue_overflow
+        - cascading_failure
+
+      purpose: "validate system behavior before production trust"
+
+    shadow_mode:
+      enabled: true
+
+      description: |
+        Runs intelligence systems in parallel without influencing production decisions.
+
+      comparison_sources:
+        - real_incidents
+        - system_logs
+        - historical_baselines
+
+    trust_scoring:
+      enabled: true
+
+      dimensions:
+        - correctness
+        - risk_alignment
+        - false_positive_rate
+        - false_negative_rate
+
+      output: "component_trust_scores"
+
+    governance:
+      require_human_review_for:
+        - model_updates
+        - threshold_changes
+        - policy_updates
+
+      audit:
+        immutable_logs: true
+        full_decision_trace: true
+
+    feedback_loop:
+      mode: "offline_batch_learning"
+
+      sources:
+        - incidents
+        - simulation_results
+        - prediction_errors
+
+    safety_constraints:
+      no_production_mutation: true
+      read_only_mode: true
+      cannot_trigger_actions: true
