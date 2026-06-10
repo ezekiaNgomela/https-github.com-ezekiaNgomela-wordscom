@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: global-consistency
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: global-consistency-engine
+  namespace: global-consistency
+data:
+  consistency.yaml: |
+    # -------------------------------------------------
+    # Phase 40: Global Consistency Layer
+    # -------------------------------------------------
+
+    model:
+      type: "hybrid-consistency"
+
+    strategies:
+      primary:
+        name: "eventual-consistency"
+        mechanism: "CRDT"
+        description: "Conflict-free replicated data types for distributed state convergence"
+
+      secondary:
+        name: "strong-consistency"
+        mechanism: "raft-consensus"
+        description: "Leader-based consensus for critical state writes"
+
+    state_replication:
+      backbone:
+        - "nats-streaming"
+        - "kafka-federation"
+
+      replication_mode: "async_multiplex"
+      sync_interval_ms: 200
+
+    conflict_resolution:
+      strategy: "last-write-wins-with-vector-clocks"
+      tie_breaker:
+        type: "region_priority"
+        order:
+          - africa-south-1
+          - eu-west-1
+          - us-east-1
+
+    distributed_state:
+      domains:
+        - name: "worker-registry"
+          consistency: "strong"
+
+        - name: "queue-state"
+          consistency: "eventual"
+
+        - name: "incident-state"
+          consistency: "strong"
+
+    failure_handling:
+      partition_tolerance: true
+      split_brain_protection: true
+      quorum_required: true
+
+    observability:
+      trace_cross_region_state: true
+      log_conflict_events: true
+
+    safety:
+      prevent_inconsistent_writes: true
+      require_quorum_for_critical_updates: true
