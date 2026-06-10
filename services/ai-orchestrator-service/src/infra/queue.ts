@@ -1,4 +1,5 @@
 import { publish } from "../core/messageBus";
+import { Queue } from "./queueInterface";
 
 /**
  * Phase 15: Queue Abstraction Layer
@@ -14,7 +15,7 @@ export type QueuedTask = {
   createdAt: number;
 };
 
-class MemoryQueue {
+class MemoryQueue implements Queue<QueuedTask> {
   private queue: QueuedTask[] = [];
 
   enqueue(task: QueuedTask) {
