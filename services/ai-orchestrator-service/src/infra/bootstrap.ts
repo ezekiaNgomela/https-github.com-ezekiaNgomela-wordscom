@@ -6,6 +6,10 @@
 import { publish } from "../core/messageBus";
 import { route } from "../core/agentRouter";
 import { updateReputation, AgentReputation, TaskResultEvent } from "./reputation";
+import { initReputationStore, updateReputationStore } from "./reputationStore";
+
+// Initialize persistent reputation store at startup
+initReputationStore();
 
 // -----------------------------
 // DISTRIBUTED QUEUE (ABSTRACT)
@@ -62,7 +66,7 @@ export async function workerNode() {
     });
 
     // -----------------------------
-    // PHASE 13B.1 REPUTATION WIRING (PERSISTED)
+    // REPUTATION UPDATE PIPELINE
     // -----------------------------
 
     const event: TaskResultEvent = {
@@ -122,6 +126,9 @@ export async function workerNode() {
     };
 
     writeSharedMemory(key, updatedAgent);
+
+    // Persist to disk-backed store
+    updateReputationStore(updatedAgent);
 
     publish({
       id: `reputation-${Date.now()}`,
