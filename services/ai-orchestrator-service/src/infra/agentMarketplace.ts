@@ -13,6 +13,15 @@ export type MarketOffer = {
   score: number;
 };
 
+function getReputation(agent: any): number {
+  // normalize reputation (assumes 0 - 1000 scale)
+  return Number(agent?.metadata?.reputationScore ?? 0) / 1000;
+}
+
+function getCostScore(price: number): number {
+  return Math.max(0, 1 - price / 10);
+}
+
 export function evaluateMarket(): MarketOffer[] {
   const agents = listAgents();
 
@@ -20,7 +29,10 @@ export function evaluateMarket(): MarketOffer[] {
     const type = a.type as ResourceType;
     const price = calculateCost(type, 1);
 
-    const score = Math.max(0, 1 - price / 10);
+    const reputation = getReputation(a);
+    const costScore = getCostScore(price);
+
+    const score = (reputation * 0.5) + (costScore * 0.5);
 
     return {
       agentId: a.id,
