@@ -7,6 +7,7 @@ import { publish } from "../core/messageBus";
 import { route } from "../core/agentRouter";
 import { updateReputation, AgentReputation, TaskResultEvent } from "./reputation";
 import { initReputationStore, updateReputationStore } from "./reputationStore";
+import { queue } from "./queue";
 
 // Initialize persistent reputation store at startup
 initReputationStore();
@@ -22,22 +23,6 @@ export type DistributedTask = {
   createdAt: number;
 };
 
-const queue: DistributedTask[] = [];
-
-export function enqueue(task: DistributedTask) {
-  queue.push(task);
-  publish({
-    id: `queue-${Date.now()}`,
-    type: "system_event",
-    payload: { stage: "task_enqueued", task },
-    timestamp: Date.now()
-  });
-}
-
-export function dequeue(): DistributedTask | undefined {
-  return queue.sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
-}
-
 // -----------------------------
 // WORKER NODE (LOGICAL NODE)
 // -----------------------------
@@ -45,7 +30,7 @@ const AGENT_ID = "worker-1";
 
 export async function workerNode() {
   while (true) {
-    const task = dequeue();
+    const task = queue.dequeue();
 
     if (!task) {
       await sleep(300);
