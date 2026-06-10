@@ -30,7 +30,22 @@ class MemoryQueue implements Queue<QueuedTask> {
   }
 
   dequeue(): QueuedTask | undefined {
-    return this.queue.sort((a, b) => (b.priority || 0) - (a.priority || 0))[0];
+    if (this.queue.length === 0) return undefined;
+
+    // Select highest priority task without mutating original order prematurely
+    const sorted = [...this.queue].sort(
+      (a, b) => (b.priority || 0) - (a.priority || 0)
+    );
+
+    const task = sorted[0];
+    if (!task) return undefined;
+
+    const index = this.queue.findIndex(t => t.id === task.id);
+    if (index !== -1) {
+      this.queue.splice(index, 1);
+    }
+
+    return task;
   }
 
   size() {
