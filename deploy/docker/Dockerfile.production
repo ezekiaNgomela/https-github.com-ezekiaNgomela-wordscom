@@ -1,0 +1,53 @@
+# -------------------------------------------------
+# Phase 19: Production Docker Image
+# Hyperscale Distributed Platform (wordscom)
+# -------------------------------------------------
+
+# -----------------------------
+# 1. Build Stage
+# -----------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci || npm install
+
+# Copy source
+COPY . .
+
+# Build TypeScript (if applicable)
+RUN npm run build || true
+
+# -----------------------------
+# 2. Production Runtime Stage
+# -----------------------------
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+
+# Install only production deps
+COPY package*.json ./
+RUN npm ci --omit=dev || npm install --omit=dev
+
+# Copy built artifacts
+COPY --from=builder /app /app
+
+# Security: run as non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+# Environment defaults
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Expose service port
+EXPOSE 3000
+
+# Healthcheck for orchestrators (K8s, Docker, etc)
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode===200?0:1)).on('error', () => process.exit(1))"
+
+# Start command (expects bootstrap entry)
+CMD ["node", "dist/infra/bootstrap.js"]
