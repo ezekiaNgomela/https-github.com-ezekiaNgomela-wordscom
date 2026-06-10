@@ -5,6 +5,7 @@
 
 import { publish } from "../core/messageBus";
 import { route } from "../core/agentRouter";
+import { updateReputation, AgentReputation, TaskResultEvent } from "./reputation";
 
 // -----------------------------
 // DISTRIBUTED QUEUE (ABSTRACT)
@@ -36,6 +37,8 @@ export function dequeue(): DistributedTask | undefined {
 // -----------------------------
 // WORKER NODE (LOGICAL NODE)
 // -----------------------------
+const AGENT_ID = "worker-1";
+
 export async function workerNode() {
   while (true) {
     const task = dequeue();
@@ -58,7 +61,60 @@ export async function workerNode() {
       timestamp: Date.now()
     });
 
-    // simulate distributed execution boundary
+    // -----------------------------
+    // PHASE 13B.1 REPUTATION WIRING
+    // -----------------------------
+
+    const event: TaskResultEvent = {
+      taskId: task.id,
+      agentId: AGENT_ID,
+      status: "success",
+      metrics: {
+        executionTimeMs: 120,
+        costUnits: 1,
+        retries: 0
+      },
+      criticScore: 0.75,
+      complexity: 0.5,
+      timestamp: Date.now()
+    };
+
+    const defaultAgent: AgentReputation = {
+      agentId: AGENT_ID,
+      score: 500,
+      dimensions: {
+        reliability: 0.5,
+        accuracy: 0.5,
+        efficiency: 0.5,
+        latency: 0.5,
+        stability: 0.5
+      },
+      stats: {
+        totalTasks: 0,
+        successfulTasks: 0,
+        failedTasks: 0,
+        lastUpdated: Date.now()
+      },
+      decay: {
+        lastDecayAt: Date.now(),
+        decayRate: 0.001
+      },
+      volatility: 0,
+      confidence: 0
+    };
+
+    const result = updateReputation(defaultAgent, event);
+
+    publish({
+      id: `reputation-${Date.now()}`,
+      type: "system_event",
+      payload: {
+        stage: "reputation_updated",
+        result
+      },
+      timestamp: Date.now()
+    });
+
     await sleep(100);
   }
 }
