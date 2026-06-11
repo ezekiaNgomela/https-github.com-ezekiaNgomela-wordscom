@@ -1,13 +1,7 @@
 /**
- * workerProcess.ts
+ * workerProcess.ts (EVENT-AWARE ORCHESTRATION LAYER)
  * -------------------------------------------------
- * Master worker orchestration layer (Phase 2)
- *
- * Responsibilities:
- * - Spawn OS-level worker processes
- * - Maintain worker registry
- * - Dispatch jobs to workers via IPC
- * - Handle worker failures and restarts
+ * Updated to dispatch deterministic BaseEvents instead of jobs.
  */
 
 import { fork } from 'child_process';
@@ -17,13 +11,17 @@ export type WorkerHandle = {
   id: string;
   process: ReturnType<typeof fork>;
   busy: boolean;
-  jobsCompleted: number;
+  eventsCompleted: number;
 };
 
-export type JobPayload = {
+export type BaseEvent = {
   id: string;
   type: string;
-  data: any;
+  entityId: string;
+  version: number;
+  timestamp: number;
+  causalChainId: string;
+  payload: any;
 };
 
 export class WorkerProcessManager {
@@ -31,18 +29,12 @@ export class WorkerProcessManager {
 
   constructor(private workerCount: number = 2) {}
 
-  /**
-   * Initialize worker pool
-   */
   public start() {
     for (let i = 0; i < this.workerCount; i++) {
       this.spawnWorker(i);
     }
   }
 
-  /**
-   * Spawn a single worker process
-   */
   private spawnWorker(index: number) {
     const workerId = `worker-${index}`;
 
@@ -58,23 +50,22 @@ export class WorkerProcessManager {
       id: workerId,
       process: worker,
       busy: false,
-      jobsCompleted: 0,
+      eventsCompleted: 0,
     };
 
     worker.on('message', (msg: any) => {
-      if (msg?.type === 'job_result') {
+      if (msg?.type === 'worker_result') {
         handle.busy = false;
-        handle.jobsCompleted++;
+        handle.eventsCompleted++;
       }
 
-      if (msg?.type === 'heartbeat') {
-        // worker health monitoring hook
+      if (msg?.type === 'worker_heartbeat') {
+        // health monitoring hook
       }
     });
 
     worker.on('exit', () => {
       this.workers.delete(workerId);
-      // auto-restart
       this.spawnWorker(index);
     });
 
@@ -82,9 +73,9 @@ export class WorkerProcessManager {
   }
 
   /**
-   * Dispatch job to first available worker
+   * Dispatch deterministic event (NOT job)
    */
-  public dispatch(job: JobPayload) {
+  public dispatch(event: BaseEvent) {
     const worker = Array.from(this.workers.values()).find(w => !w.busy);
 
     if (!worker) {
@@ -94,19 +85,16 @@ export class WorkerProcessManager {
     worker.busy = true;
 
     worker.process.send({
-      type: 'job',
-      payload: job,
+      type: 'event',
+      payload: event,
     });
   }
 
-  /**
-   * Get worker stats
-   */
   public getStatus() {
     return Array.from(this.workers.values()).map(w => ({
       id: w.id,
       busy: w.busy,
-      jobsCompleted: w.jobsCompleted,
+      eventsCompleted: w.eventsCompleted,
     }));
   }
 }
