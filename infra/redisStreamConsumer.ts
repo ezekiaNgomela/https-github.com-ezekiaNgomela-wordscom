@@ -1,19 +1,20 @@
 /**
  * redisStreamConsumer.ts
  * -------------------------------------------------
- * Phase 8: True Stream Consumption Model
- *
- * Replaces push-based worker dispatch with Redis Stream consumer groups.
- * Workers now consume events instead of receiving direct dispatch calls.
+ * Phase 8 + 10: Stream Consumer with Retry + DLQ
  */
 
 import { createClient } from 'redis';
 import { WorkerProcessManager } from './workerProcess';
 import { BaseEvent } from './eventStore';
+import { DeadLetterQueue } from './deadLetterQueue';
+import { RetryPolicy } from './retryPolicy';
 
 export class RedisStreamConsumer {
   private client;
   private running = false;
+  private dlq: DeadLetterQueue;
+  private retryPolicy: RetryPolicy;
 
   constructor(
     private redisUrl: string,
@@ -22,6 +23,8 @@ export class RedisStreamConsumer {
     private manager: WorkerProcessManager
   ) {
     this.client = createClient({ url: redisUrl });
+    this.dlq = new DeadLetterQueue(redisUrl);
+    this.retryPolicy = new RetryPolicy(3);
 
     this.client.on('error', (err) => {
       console.error('[RedisStreamConsumer] Error:', err);
@@ -38,15 +41,12 @@ export class RedisStreamConsumer {
 
     console.log('[RedisStreamConsumer] Starting consumer loop...');
 
-    // Ensure consumer group exists per stream
     for (const id of entityIds) {
       const key = this.streamKey(id);
 
       try {
         await this.client.xGroupCreate(key, this.group, '0', { MKSTREAM: true });
-      } catch (err: any) {
-        // group already exists
-      }
+      } catch (err: any) {}
     }
 
     while (this.running) {
@@ -57,14 +57,8 @@ export class RedisStreamConsumer {
           const response = await this.client.xReadGroup(
             this.group,
             this.consumer,
-            {
-              key,
-              id: '>'
-            },
-            {
-              COUNT: 10,
-              BLOCK: 1000
-            }
+            { key, id: '>' },
+            { COUNT: 10, BLOCK: 1000 }
           );
 
           if (!response) continue;
@@ -83,10 +77,26 @@ export class RedisStreamConsumer {
                 payload: JSON.parse(fields.payload),
               };
 
-              // Push into existing worker pool (reuses execution layer)
-              this.manager.dispatch(event);
+              let attempt = 0;
+              let success = false;
 
-              // ACK message
+              while (!success) {
+                try {
+                  this.manager.dispatch(event);
+                  success = true;
+                } catch (err) {
+                  attempt++;
+
+                  if (this.retryPolicy.shouldRetry({ eventId: event.id, attempt, error: err })) {
+                    const delay = this.retryPolicy.getDelayMs(attempt);
+                    await new Promise(r => setTimeout(r, delay));
+                  } else {
+                    await this.dlq.push(event, String(err));
+                    break;
+                  }
+                }
+              }
+
               await this.client.xAck(key, this.group, message.id);
             }
           }
