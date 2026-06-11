@@ -2,41 +2,31 @@
  * runtime.ts
  * -------------------------------------------------
  * Unified system entrypoint (Phase 4)
- *
- * This file activates the full distributed-capable runtime:
- * - WorkerProcessManager (multi-process layer)
- * - ExecutionBridge (queue → workers pipeline)
- * - Control loop integration hook (future binding)
+ * Refactored to align with Event-Sourced Execution Model
  */
 
 import { WorkerProcessManager } from './workerProcess';
-import { ExecutionBridge } from './executionBridge';
 
 /**
  * System Runtime Bootstrap
  */
 export class Runtime {
   private manager: WorkerProcessManager;
-  private bridge: ExecutionBridge;
 
   constructor(workerCount = 2) {
     this.manager = new WorkerProcessManager(workerCount);
-    this.bridge = new ExecutionBridge(this.manager);
   }
 
   /**
    * Start full system
    */
   public start() {
-    console.log('[Runtime] Starting system...');
+    console.log('[Runtime] Starting system (event-sourced mode)...');
 
-    // 1. Start worker pool
+    // Start worker pool only
     this.manager.start();
 
-    // 2. Start execution bridge
-    this.bridge.start(100);
-
-    console.log('[Runtime] System fully active');
+    console.log('[Runtime] Workers active');
   }
 
   /**
@@ -44,7 +34,6 @@ export class Runtime {
    */
   public stop() {
     console.log('[Runtime] Stopping system...');
-    this.bridge.stop();
   }
 
   /**
