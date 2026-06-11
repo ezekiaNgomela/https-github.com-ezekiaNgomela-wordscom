@@ -1,52 +1,76 @@
 /**
  * runtime.ts
  * -------------------------------------------------
- * Unified system entrypoint (Phase 9)
- * Fully wired event-sourced execution + Redis stream consumption
+ * Unified system entrypoint (Phase 12 - FINISHED)
+ * Fully wired event-sourced execution + Redis cluster coordination
  */
 
 import { WorkerProcessManager } from './workerProcess';
 import { RedisStreamConsumer } from './redisStreamConsumer';
+import { ClusterCoordinator } from './clusterCoordinator';
+import { PartitionManager } from './partitionManager';
 
 /**
- * System Runtime Bootstrap
+ * System Runtime Bootstrap (Cluster Aware)
  */
 export class Runtime {
   private manager: WorkerProcessManager;
   private consumer?: RedisStreamConsumer;
+  private cluster?: ClusterCoordinator;
+  private partition?: PartitionManager;
 
   constructor(workerCount = 2) {
     this.manager = new WorkerProcessManager(workerCount);
   }
 
   /**
-   * Start full system
+   * Start full system (cluster-aware)
    */
   public async start() {
-    console.log('[Runtime] Starting system (FULL EVENT-SOURCED MODE)...');
+    console.log('[Runtime] Starting system (CLUSTER MODE)...');
 
     // 1. Start worker pool
     this.manager.start();
 
-    // 2. Build entity subscription list
-    const entityIds = process.env.ENTITY_IDS
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+
+    // 2. Cluster coordination
+    const nodeId = `node-${Math.random().toString(36).slice(2)}`;
+
+    this.cluster = new ClusterCoordinator(redisUrl, nodeId);
+    await this.cluster.connect();
+
+    await this.cluster.registerNode();
+    this.cluster.startElectionLoop();
+
+    // 3. Build entity list
+    const allEntities = process.env.ENTITY_IDS
       ? process.env.ENTITY_IDS.split(',').map(s => s.trim())
       : ['default'];
 
-    // 3. Start Redis stream consumer (event ingestion → execution)
+    // 4. Partition manager (initial nodes snapshot)
+    const nodes = await this.cluster.getNodes();
+    this.partition = new PartitionManager(nodes);
+
+    const ownedEntities = this.partition.getOwnedEntities(allEntities, nodeId);
+
+    console.log('[Runtime] Node:', nodeId);
+    console.log('[Runtime] Cluster nodes:', nodes);
+    console.log('[Runtime] Owned entities:', ownedEntities);
+
+    // 5. Start Redis stream consumer (ONLY owned partitions)
     this.consumer = new RedisStreamConsumer(
-      process.env.REDIS_URL || 'redis://localhost:6379',
+      redisUrl,
       'event_group',
-      `consumer-${Math.random().toString(36).slice(2)}`,
+      nodeId,
       this.manager
     );
 
-    // 4. Run consumer loop (non-blocking)
-    this.consumer.start(entityIds).catch(err => {
+    this.consumer.start(ownedEntities).catch(err => {
       console.error('[Runtime] Consumer crashed:', err);
     });
 
-    console.log('[Runtime] Workers + Redis consumer active');
+    console.log('[Runtime] Cluster runtime active');
   }
 
   /**
@@ -56,6 +80,7 @@ export class Runtime {
     console.log('[Runtime] Stopping system...');
 
     await this.consumer?.disconnect();
+    await this.cluster?.disconnect();
   }
 
   /**
@@ -65,6 +90,7 @@ export class Runtime {
     return {
       workers: this.manager.getStatus(),
       consumerRunning: !!this.consumer,
+      clusterLeader: this.cluster?.isLeader() ?? false,
     };
   }
 }
