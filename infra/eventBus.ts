@@ -1,14 +1,12 @@
 /**
- * eventBus.ts
+ * eventBus.ts (LEGACY COMPATIBILITY LAYER)
  * -------------------------------------------------
- * Lightweight internal event bus
- * Used to decouple:
- * - WorkerProcessManager events
- * - ExecutionBridge signals
- * - ControlLoop feedback system
- *
- * Phase 6 foundation for observability + adaptive scaling
+ * This file now bridges legacy event system with EventStore.
+ * Existing listeners remain functional while new system migrates.
  */
+
+import { eventStore } from "./eventStore";
+import { BaseEvent } from "./eventStore";
 
 type EventHandler = (payload: any) => void;
 
@@ -23,9 +21,6 @@ type EventMap = {
 class EventBus {
   private listeners: Map<string, Set<EventHandler>> = new Map();
 
-  /**
-   * Subscribe to event
-   */
   on<T extends keyof EventMap>(event: T, handler: (payload: EventMap[T]) => void) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
@@ -33,25 +28,32 @@ class EventBus {
     this.listeners.get(event)!.add(handler as EventHandler);
   }
 
-  /**
-   * Emit event
-   */
   emit<T extends keyof EventMap>(event: T, payload: EventMap[T]) {
     const handlers = this.listeners.get(event);
-    if (!handlers) return;
 
-    for (const handler of handlers) {
-      try {
-        handler(payload);
-      } catch (err) {
-        console.error(`[EventBus] handler error on ${event}:`, err);
+    if (handlers) {
+      for (const handler of handlers) {
+        try {
+          handler(payload);
+        } catch (err) {
+          console.error(`[EventBus] handler error on ${event}:`, err);
+        }
       }
     }
+
+    const legacyEvent: BaseEvent = {
+      id: crypto.randomUUID?.() ?? String(Date.now()),
+      type: "STATE_UPDATED",
+      entityId: "legacy",
+      version: Date.now(),
+      timestamp: Date.now(),
+      causalChainId: "legacy",
+      payload: { event, payload },
+    };
+
+    eventStore.append(legacyEvent).catch(() => {});
   }
 
-  /**
-   * Remove listener
-   */
   off<T extends keyof EventMap>(event: T, handler: EventHandler) {
     this.listeners.get(event)?.delete(handler);
   }
