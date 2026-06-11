@@ -1,18 +1,13 @@
 /**
  * runtime.controller.ts
  * -------------------------------------------------
- * Phase 5: System control plane
- *
- * Responsibilities:
- * - Start Runtime (worker pool + execution bridge)
- * - Provide HTTP ingestion API for jobs
- * - Expose system status endpoint
- * - Prepare hook for controlLoop feedback integration
+ * Phase 5: Control plane (event-sourced alignment)
+ * Refactored to remove legacy queue dependency
  */
 
 import http from 'http';
 import { Runtime } from './runtime';
-import { queue } from './queue';
+import { eventStore } from './eventStore';
 
 /**
  * Control Plane Wrapper
@@ -28,10 +23,8 @@ export class RuntimeController {
    * Start full system + API layer
    */
   public start(port = 3000) {
-    // Start execution runtime
     this.runtime.start();
 
-    // Start HTTP ingestion API
     const server = http.createServer(async (req, res) => {
       try {
         if (req.method === 'POST' && req.url === '/job') {
@@ -39,18 +32,25 @@ export class RuntimeController {
 
           req.on('data', chunk => (body += chunk));
 
-          req.on('end', () => {
+          req.on('end', async () => {
             try {
               const job = JSON.parse(body || '{}');
 
-              queue.enqueue?.({
-                id: job.id || `job-${Date.now()}`,
-                type: job.type || 'default',
-                data: job.data || {},
-              });
+              // Convert legacy job → event (transition layer)
+              const event = {
+                id: job.id || `evt-${Date.now()}`,
+                type: 'COMMAND_CREATED',
+                entityId: job.entityId || 'default',
+                version: 1,
+                timestamp: Date.now(),
+                causalChainId: 'api',
+                payload: job.data || {},
+              };
+
+              await eventStore.append(event);
 
               res.writeHead(200);
-              res.end(JSON.stringify({ status: 'queued' }));
+              res.end(JSON.stringify({ status: 'event_created' }));
             } catch (err: any) {
               res.writeHead(400);
               res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
@@ -80,28 +80,14 @@ export class RuntimeController {
       console.log(`[RuntimeController] API running on port ${port}`);
     });
 
-    // TODO: Wire controlLoop feedback system
-    // - connect worker results → controlLoop
-    // - enable adaptive scaling decisions
     this.wireControlLoop();
   }
 
-  /**
-   * Placeholder integration hook
-   */
   private wireControlLoop() {
-    // Future Phase 5.1:
-    // - subscribe to workerProcessManager events
-    // - forward job results to controlLoop
-    // - enable scaling decisions based on throughput
-
-    console.log('[RuntimeController] controlLoop wiring pending');
+    console.log('[RuntimeController] controlLoop wiring pending (event-sourced mode)');
   }
 }
 
-/**
- * Auto-start if executed directly
- */
 const isMain = require.main === module;
 
 if (isMain) {
