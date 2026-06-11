@@ -1,7 +1,7 @@
 /**
  * redisStreamConsumer.ts
  * -------------------------------------------------
- * Phase 8 + 10: Stream Consumer with Retry + DLQ
+ * Phase 8 + 10 + 11: Stream Consumer with Retry + DLQ + Backpressure
  */
 
 import { createClient } from 'redis';
@@ -9,12 +9,14 @@ import { WorkerProcessManager } from './workerProcess';
 import { BaseEvent } from './eventStore';
 import { DeadLetterQueue } from './deadLetterQueue';
 import { RetryPolicy } from './retryPolicy';
+import { BackpressureController } from './backpressureController';
 
 export class RedisStreamConsumer {
   private client;
   private running = false;
   private dlq: DeadLetterQueue;
   private retryPolicy: RetryPolicy;
+  private backpressure: BackpressureController;
 
   constructor(
     private redisUrl: string,
@@ -25,6 +27,7 @@ export class RedisStreamConsumer {
     this.client = createClient({ url: redisUrl });
     this.dlq = new DeadLetterQueue(redisUrl);
     this.retryPolicy = new RetryPolicy(3);
+    this.backpressure = new BackpressureController(10);
 
     this.client.on('error', (err) => {
       console.error('[RedisStreamConsumer] Error:', err);
@@ -51,6 +54,17 @@ export class RedisStreamConsumer {
 
     while (this.running) {
       try {
+        const status: any = this.manager.getStatus();
+        const inFlight = status.inFlight ?? status.busy ?? status.active ?? 0;
+
+        const shouldPause = this.backpressure.shouldPause(inFlight);
+        const batchSize = this.backpressure.getBatchSize(inFlight);
+
+        if (shouldPause || batchSize === 0) {
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        }
+
         for (const id of entityIds) {
           const key = this.streamKey(id);
 
@@ -58,7 +72,7 @@ export class RedisStreamConsumer {
             this.group,
             this.consumer,
             { key, id: '>' },
-            { COUNT: 10, BLOCK: 1000 }
+            { COUNT: batchSize, BLOCK: 1000 }
           );
 
           if (!response) continue;
