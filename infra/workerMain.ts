@@ -1,52 +1,52 @@
 /**
- * workerMain.ts
+ * workerMain.ts (EVENT-SOURCED EXECUTION WORKER)
  * -------------------------------------------------
- * Real execution boundary for distributed upgrade.
- * This file is intended to run as a separate OS process
- * (child_process.fork or worker_threads in later phase).
- *
- * Responsibilities:
- * - Receive jobs from parent process (IPC)
- * - Execute tasks from AI orchestrator queue
- * - Return structured results
- * - Report health status
+ * This worker now processes deterministic BaseEvents instead of ad-hoc jobs.
+ * It becomes a pure execution unit in the event-sourced system.
  */
 
-type JobPayload = {
+type BaseEvent = {
   id: string;
   type: string;
-  data: any;
+  entityId: string;
+  version: number;
+  timestamp: number;
+  causalChainId: string;
+  payload: any;
 };
 
-type JobResult = {
-  id: string;
+type WorkerResult = {
+  eventId: string;
   success: boolean;
-  result?: any;
+  output?: any;
   error?: string;
 };
 
-// Ensure TypeScript compiles in both standalone and forked mode
 const isChildProcess = typeof process.send === 'function';
 
 /**
- * Core worker execution logic
+ * Deterministic event execution logic
  */
-async function executeJob(job: JobPayload): Promise<JobResult> {
+async function executeEvent(event: BaseEvent): Promise<WorkerResult> {
   try {
-    const result = {
+    // PURE EXECUTION LOGIC (no side effects outside result)
+    const output = {
       processed: true,
-      echo: job.data,
+      eventType: event.type,
+      entityId: event.entityId,
+      result: event.payload,
       timestamp: Date.now()
     };
 
     return {
-      id: job.id,
+      eventId: event.id,
       success: true,
-      result
+      output
     };
+
   } catch (err: any) {
     return {
-      id: job.id,
+      eventId: event.id,
       success: false,
       error: err?.message || 'Unknown error'
     };
@@ -55,21 +55,25 @@ async function executeJob(job: JobPayload): Promise<JobResult> {
 
 if (isChildProcess) {
   process.on('message', async (msg: any) => {
-    if (!msg || msg.type !== 'job') return;
+    if (!msg) return;
 
-    const job = msg.payload as JobPayload;
+    // NEW: event-driven execution model
+    if (msg.type !== 'event') return;
 
-    const result = await executeJob(job);
+    const event = msg.payload as BaseEvent;
+
+    const result = await executeEvent(event);
 
     process.send?.({
-      type: 'job_result',
+      type: 'worker_result',
       payload: result
     });
   });
 
+  // lightweight heartbeat
   setInterval(() => {
     process.send?.({
-      type: 'heartbeat',
+      type: 'worker_heartbeat',
       payload: {
         status: 'alive',
         ts: Date.now()
@@ -78,4 +82,4 @@ if (isChildProcess) {
   }, 5000);
 }
 
-export default executeJob;
+export default executeEvent;
