@@ -1,7 +1,7 @@
 /**
  * redisStreamConsumer.ts
  * -------------------------------------------------
- * Phase 8 + 10 + 11: Stream Consumer with Retry + DLQ + Backpressure
+ * Phase 8 + 10 + 11 + HARDENING: Stream Consumer with Retry + DLQ + Backpressure + Idempotency
  */
 
 import { createClient } from 'redis';
@@ -10,6 +10,7 @@ import { BaseEvent } from './eventStore';
 import { DeadLetterQueue } from './deadLetterQueue';
 import { RetryPolicy } from './retryPolicy';
 import { BackpressureController } from './backpressureController';
+import { IdempotencyStore } from './idempotencyStore';
 
 export class RedisStreamConsumer {
   private client;
@@ -17,6 +18,7 @@ export class RedisStreamConsumer {
   private dlq: DeadLetterQueue;
   private retryPolicy: RetryPolicy;
   private backpressure: BackpressureController;
+  private idem: IdempotencyStore;
 
   constructor(
     private redisUrl: string,
@@ -25,9 +27,11 @@ export class RedisStreamConsumer {
     private manager: WorkerProcessManager
   ) {
     this.client = createClient({ url: redisUrl });
+
     this.dlq = new DeadLetterQueue(redisUrl);
     this.retryPolicy = new RetryPolicy(3);
     this.backpressure = new BackpressureController(10);
+    this.idem = new IdempotencyStore(redisUrl);
 
     this.client.on('error', (err) => {
       console.error('[RedisStreamConsumer] Error:', err);
@@ -40,9 +44,11 @@ export class RedisStreamConsumer {
 
   async start(entityIds: string[]) {
     await this.client.connect();
+    await this.idem.connect();
+    await this.dlq.connect();
     this.running = true;
 
-    console.log('[RedisStreamConsumer] Starting consumer loop...');
+    console.log('[RedisStreamConsumer] Starting hardened consumer loop...');
 
     for (const id of entityIds) {
       const key = this.streamKey(id);
@@ -90,6 +96,13 @@ export class RedisStreamConsumer {
                 causalChainId: fields.causalChainId,
                 payload: JSON.parse(fields.payload),
               };
+
+              // 🔐 Idempotency gate (CRITICAL FIX)
+              const isNew = await this.idem.markIfNew(event.id);
+              if (!isNew) {
+                await this.client.xAck(key, this.group, message.id);
+                continue;
+              }
 
               let attempt = 0;
               let success = false;
