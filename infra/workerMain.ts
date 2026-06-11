@@ -5,6 +5,8 @@
  * It becomes a pure execution unit in the event-sourced system.
  */
 
+import { executionLedger } from './executionLedger';
+
 type BaseEvent = {
   id: string;
   type: string;
@@ -29,7 +31,6 @@ const isChildProcess = typeof process.send === 'function';
  */
 async function executeEvent(event: BaseEvent): Promise<WorkerResult> {
   try {
-    // PURE EXECUTION LOGIC (no side effects outside result)
     const output = {
       processed: true,
       eventType: event.type,
@@ -38,18 +39,41 @@ async function executeEvent(event: BaseEvent): Promise<WorkerResult> {
       timestamp: Date.now()
     };
 
-    return {
+    const result: WorkerResult = {
       eventId: event.id,
       success: true,
       output
     };
 
+    // RECORD INTO EXECUTION LEDGER
+    executionLedger.record({
+      eventId: event.id,
+      entityId: event.entityId,
+      type: event.type,
+      timestamp: Date.now(),
+      success: true,
+      output
+    });
+
+    return result;
+
   } catch (err: any) {
-    return {
+    const result: WorkerResult = {
       eventId: event.id,
       success: false,
       error: err?.message || 'Unknown error'
     };
+
+    executionLedger.record({
+      eventId: event.id,
+      entityId: event.entityId,
+      type: event.type,
+      timestamp: Date.now(),
+      success: false,
+      error: result.error
+    });
+
+    return result;
   }
 }
 
@@ -57,7 +81,6 @@ if (isChildProcess) {
   process.on('message', async (msg: any) => {
     if (!msg) return;
 
-    // NEW: event-driven execution model
     if (msg.type !== 'event') return;
 
     const event = msg.payload as BaseEvent;
@@ -70,7 +93,6 @@ if (isChildProcess) {
     });
   });
 
-  // lightweight heartbeat
   setInterval(() => {
     process.send?.({
       type: 'worker_heartbeat',
